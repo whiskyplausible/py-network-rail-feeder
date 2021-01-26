@@ -47,20 +47,13 @@ class TDListener(stomp.ConnectionListener):
         for message in json.loads(messages):
             
             if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
-                    print(B+ message)
+                    print(B+ str(message))
                     try:
                         id = message["CA_MSG"]["descr"]
                         print(service_codes[train_ids[id]])
                     except:
                         print("didn't work")
-            if json.dumps(message).find("2V64") > -1:
-                print(R+str(message))
-                try:
-                    id = message["CA_MSG"]["descr"]
-                    print(train_ids[id])
-                    print(service_codes[train_ids[id]])
-                except:
-                    print("couldn't find train")
+            
                 
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
