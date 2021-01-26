@@ -1,3 +1,13 @@
+Area seems to be D9 when going south or north, can probably ignore the GL.
+
+So, here:
+https://www.opentraintimes.com/maps/signalling/gloucester#T_GLOSTER
+Top line is going North, bottom line is going South.
+
+AC says "So we’ve worked out that going South, when the train moves from signal ref 2019 to 2021 there are around 30 seconds before we see it pass our office.
+
+Likewise going North, when the train moves from signal ref 2020 to 2018  there are around 30 seconds before we see it pass our office."
+ 
 stanox codes we're interested in:
 68162
 68161

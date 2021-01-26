@@ -1,6 +1,8 @@
 # Visual Studio code preference folder
 .vscode
 
+creds.py
+
 ##
 ## R Section - See https://github.com/github/gitignore/blob/master/R.gitignore
 ##
