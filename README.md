@@ -1,3 +1,10 @@
+Pi stuff, need to install stomp.py (correct version) as sudo because we run script as sudo.
+
+To run script on pi:
+sudo python3 trainsign_pi.py --led-rows=32 --led-cols=64 --led-chain=3
+
+
+----------------------------------------------------
 Area seems to be D9 when going south or north, can probably ignore the GL.
 
 So, here:
