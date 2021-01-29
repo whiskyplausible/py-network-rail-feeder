@@ -13,9 +13,16 @@ import json
 import time
 import creds
 import csv 
+import logging
 from samplebase import SampleBase
 from rgbmatrix import graphics
 import datetime
+
+logging.basicConfig(
+    filename='trains.log', filemode='w',
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.CRITICAL,
+    datefmt='%Y-%m-%d %H:%M:%S')
 
 HOSTNAME = "datafeeds.networkrail.co.uk"
 USERNAME = creds.USERNAME
@@ -122,13 +129,18 @@ class TDListener(stomp.ConnectionListener):
 
             if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                 show_trains = True
-               
+                
                 #print(B+ str(message))
                 id = message["CA_MSG"]["descr"]
+                logging.critical("Train arrived. "+ str(message))
                 try:
                     service_id = service_codes[train_ids[id]]
+                    logging.critical("Found service code "+train_ids[id])
+                    logging.critical("Found service "+service_id)
                 except:
                     service_id = id # show service code here too if poss?
+                    if id in train_ids:
+                        logging.critical("Failed to find service, but found this train ID "+train_ids[id])
 
                 if message["CA_MSG"]["to"] == "2021":
                     train_text[1] = service_id
