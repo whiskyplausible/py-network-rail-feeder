@@ -1,3 +1,5 @@
+This has stuff about accesing and parsing TRUST service: https://github.com/naxxfish/nrod-funnel
+
 So train_id is actually the Trust ID, I should be able to look this up somewhere surely? Then I odn't have to rely on that spreadsheet of codes.
 So I think the edinburgh to birmingham is actually a cross country one to plymouth from scotaldn.
 
