@@ -1,3 +1,12 @@
+So train_id is actually the Trust ID, I should be able to look this up somewhere surely? Then I odn't have to rely on that spreadsheet of codes.
+So I think the edinburgh to birmingham is actually a cross country one to plymouth from scotaldn.
+
+Apparently the first two digits of trust Id are originating area, but can't quite work that out. middle 4 are headcode:
+https://wiki.openraildata.com/index.php/Train_Activation
+
+Seems to be some really good data feeds from here:  https://api.rtt.io/
+-------------------------------------------------------
+
 Pi stuff, need to install stomp.py (correct version) as sudo because we run script as sudo.
 
 To run script on pi:
