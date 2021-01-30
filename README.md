@@ -4,6 +4,8 @@ So I think the edinburgh to birmingham is actually a cross country one to plymou
 Apparently the first two digits of trust Id are originating area, but can't quite work that out. middle 4 are headcode:
 https://wiki.openraildata.com/index.php/Train_Activation
 
+Think I can maybe search for TRUST codes within the darwin data feed. There's also the TRUST system which might have some data too.
+
 Seems to be some really good data feeds from here:  https://api.rtt.io/
 -------------------------------------------------------
 
