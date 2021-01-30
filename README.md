@@ -7,6 +7,8 @@ https://wiki.openraildata.com/index.php/Train_Activation
 Think I can maybe search for TRUST codes within the darwin data feed. There's also the TRUST system which might have some data too.
 
 Seems to be some really good data feeds from here:  https://api.rtt.io/
+
+Stanox 2 digit codes are all listed here (cover quite big areas really): https://wiki.openraildata.com/index.php/STANOX_Areas
 -------------------------------------------------------
 
 Pi stuff, need to install stomp.py (correct version) as sudo because we run script as sudo.
