@@ -1,3 +1,18 @@
+This has stuff about accesing and parsing TRUST service: https://github.com/naxxfish/nrod-funnel
+
+So train_id is actually the Trust ID, I should be able to look this up somewhere surely? Then I odn't have to rely on that spreadsheet of codes.
+So I think the edinburgh to birmingham is actually a cross country one to plymouth from scotaldn.
+
+Apparently the first two digits of trust Id are originating area, but can't quite work that out. middle 4 are headcode:
+https://wiki.openraildata.com/index.php/Train_Activation
+
+Think I can maybe search for TRUST codes within the darwin data feed. There's also the TRUST system which might have some data too.
+
+Seems to be some really good data feeds from here:  https://api.rtt.io/
+
+Stanox 2 digit codes are all listed here (cover quite big areas really): https://wiki.openraildata.com/index.php/STANOX_Areas
+-------------------------------------------------------
+
 Pi stuff, need to install stomp.py (correct version) as sudo because we run script as sudo.
 
 To run script on pi:
