@@ -14,9 +14,13 @@ import time
 import creds
 import csv 
 import logging
-from samplebase import SampleBase
-from rgbmatrix import graphics
 import datetime
+
+dev = True
+
+if not dev:
+    from samplebase import SampleBase
+    from rgbmatrix import graphics
 
 logging.basicConfig(
     filename='trains.log', filemode='a',
@@ -36,6 +40,8 @@ train_last_seen = [0,0]
 train_text = ["", ""]
 train_change = False
 current_display = "BLANK"
+last_td_message = start_time
+last_mvt_message = start_time
 
 train_fake = [False, False, False, False]
 
@@ -50,7 +56,7 @@ train_ids = {}
 
 service_codes = {}
 
-class RunText(SampleBase):
+class RunText(): #SampleBase):
     def __init__(self, *args, **kwargs):
         print("init")
         super(RunText, self).__init__(*args, **kwargs)
@@ -100,11 +106,14 @@ class RunText(SampleBase):
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
+        logging.critical("Error in TDListener "+str(message))
     def on_message(self, headers, messages):
-        global train_fake, train_text, train_last_seen, train_change, show_trains
+        global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message
+        last_td_message = time.perf_counter()
         try:
+            print(".", end='', flush=True)
             for message in json.loads(messages):
-
+                
                 if time.perf_counter() - start_time > 5 and not train_fake[0]:
                     train_fake[0] = True
                     print("faking a train!")
@@ -196,7 +205,10 @@ class MVTListener(stomp.ConnectionListener):
 
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
+        logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
+        global last_mvt_message
+        last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
             msg = message['body']
@@ -213,6 +225,8 @@ class MVTListener(stomp.ConnectionListener):
                 #pickle.dump(train_ids, filehandler)
 
 def make_connections():
+    print("reset connections")
+    logging.critical("resetting connections") 
     td_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
     td_conn.set_listener('', TDListener())
     td_conn.start()
@@ -238,11 +252,25 @@ with open('./train_service_codes/service_codes.csv') as csv_file:
             line_count += 1
 
 make_connections()
-run_text = RunText()
-if (not run_text.process()):
+
+if not dev:
+    run_text = RunText()
+    if (not run_text.process()):
         run_text.print_help()
 
 while 1:
+
+    now = datetime.datetime.now()
+
+    if now.strftime("%H:%M") == "00:00":
+        train_ids = {}
+
+    if last_mvt_message + 30 < time.perf_counter() or last_td_message + 30 < time.perf_counter():
+        logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+        last_mvt_message = time.perf_counter()
+        last_td_message = time.perf_counter()
+        make_connections()
+
     if show_trains and current_display != "TRAINS":
         current_display = "TRAINS"
         print("showing trains", train_text)
@@ -260,6 +288,7 @@ while 1:
     if train_change and not show_trains:
         train_change = False   
         print("train has now passed by")
+        
 
     if train_text[0] and train_last_seen[0] + 300 < time.perf_counter() - start_time:
         train_text[0] = ""
