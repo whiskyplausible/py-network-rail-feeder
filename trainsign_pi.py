@@ -19,7 +19,7 @@ from rgbmatrix import graphics
 import datetime
 
 logging.basicConfig(
-    filename='trains.log', filemode='w',
+    filename='trains.log', filemode='a',
     format='%(asctime)s %(levelname)-8s %(message)s',
     level=logging.CRITICAL,
     datefmt='%Y-%m-%d %H:%M:%S')
@@ -102,92 +102,95 @@ class TDListener(stomp.ConnectionListener):
         print('received an error "%s"' % message)
     def on_message(self, headers, messages):
         global train_fake, train_text, train_last_seen, train_change, show_trains
+        try:
+            for message in json.loads(messages):
 
-        for message in json.loads(messages):
-
-            if time.perf_counter() - start_time > 5 and not train_fake[0]:
-                train_fake[0] = True
-                print("faking a train!")
-                message = {
-                    "CA_MSG": {
-                        "area_id": "D9",
-                        "to": "2018",
-                        "descr": "0101"
+                if time.perf_counter() - start_time > 5 and not train_fake[0]:
+                    train_fake[0] = True
+                    print("faking a train!")
+                    message = {
+                        "CA_MSG": {
+                            "area_id": "D9",
+                            "to": "2018",
+                            "descr": "0101"
+                        }
                     }
-                }
 
-            if time.perf_counter() - start_time > 10 and not train_fake[2]:
-                train_fake[2] = True
-                print("faking a train!")
-                message = {
-                    "CA_MSG": {
-                        "area_id": "D9",
-                        "to": "2021",
-                        "descr": "aaaa"
+                if time.perf_counter() - start_time > 10 and not train_fake[2]:
+                    train_fake[2] = True
+                    print("faking a train!")
+                    message = {
+                        "CA_MSG": {
+                            "area_id": "D9",
+                            "to": "2021",
+                            "descr": "aaaa"
+                        }
                     }
-                }
 
-            if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
-                show_trains = True
-                
-                #print(B+ str(message))
-                id = message["CA_MSG"]["descr"]
-                logging.critical("Train arrived. "+ str(message))
-                try:
-                    service_id = service_codes[train_ids[id]]
-                    logging.critical("Found service code "+train_ids[id])
-                    logging.critical("Found service "+service_id)
-                except:
-                    service_id = id # show service code here too if poss?
-                    if id in train_ids:
-                        logging.critical("Failed to find service, but found this train ID "+train_ids[id])
+                if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
+                    show_trains = True
+                    
+                    #print(B+ str(message))
+                    id = message["CA_MSG"]["descr"]
+                    logging.critical("Train arrived. "+ str(message))
+                    try:
+                        service_id = service_codes[train_ids[id]]
+                        logging.critical("Found service code "+train_ids[id])
+                        logging.critical("Found service "+service_id)
+                    except:
+                        service_id = id # show service code here too if poss?
+                        if id in train_ids:
+                            logging.critical("Failed to find service, but found this train ID "+train_ids[id])
 
-                if message["CA_MSG"]["to"] == "2021":
-                    train_text[1] = service_id
-                    train_last_seen[1] = time.perf_counter() - start_time
-                else:
-                    train_text[0] = service_id
-                    train_last_seen[0] = time.perf_counter() - start_time
+                    if message["CA_MSG"]["to"] == "2021":
+                        train_text[1] = service_id
+                        train_last_seen[1] = time.perf_counter() - start_time
+                    else:
+                        train_text[0] = service_id
+                        train_last_seen[0] = time.perf_counter() - start_time
 
-                train_change = True
+                    train_change = True
 
-            if time.perf_counter() - start_time > 20 and not train_fake[1]:
-                train_fake[1] = True
-                print("faking a train!")
-                message = {
-                    "CA_MSG": {
-                        "area_id": "D9",
-                        "to": "2016",
-                        "descr": "0101"
+                if time.perf_counter() - start_time > 20 and not train_fake[1]:
+                    train_fake[1] = True
+                    print("faking a train!")
+                    message = {
+                        "CA_MSG": {
+                            "area_id": "D9",
+                            "to": "2016",
+                            "descr": "0101"
+                        }
                     }
-                }
 
 
-            if time.perf_counter() - start_time > 30 and not train_fake[3]:
-                train_fake[3] = True
-                print("faking a train!")
-                message = {
-                    "CA_MSG": {
-                        "area_id": "D9",
-                        "to": "2023",
-                        "descr": "aaaa"
+                if time.perf_counter() - start_time > 30 and not train_fake[3]:
+                    train_fake[3] = True
+                    print("faking a train!")
+                    message = {
+                        "CA_MSG": {
+                            "area_id": "D9",
+                            "to": "2023",
+                            "descr": "aaaa"
+                        }
                     }
-                }
 
-            if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
-                if message["CA_MSG"]["to"] == "2023":
-                    train_text[1] = ""
-                    train_last_seen[1] = 0
-                    print("train has passed south")
-                else:
-                    train_text[0] = ""
-                    train_last_seen[0] = 0
-                    print("train has passed north")
+                if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
+                    if message["CA_MSG"]["to"] == "2023":
+                        train_text[1] = ""
+                        train_last_seen[1] = 0
+                        print("train has passed south")
+                    else:
+                        train_text[0] = ""
+                        train_last_seen[0] = 0
+                        print("train has passed north")
 
-                if train_text[0] == "" and train_text[1] == "":
-                    show_trains = False
+                    if train_text[0] == "" and train_text[1] == "":
+                        show_trains = False
 
-                train_change = True
+                    train_change = True
+        
+        except:
+            logging.critical("this is an exception", exc_info=True) 
 
 class MVTListener(stomp.ConnectionListener):
 
@@ -204,6 +207,7 @@ class MVTListener(stomp.ConnectionListener):
             ]
             
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
+                logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 #filehandler = open("train_ids", 'wb') 
                 #pickle.dump(train_ids, filehandler)
