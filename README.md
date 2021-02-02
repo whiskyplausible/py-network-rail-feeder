@@ -1,4 +1,16 @@
+A train activation message contains the Trust ID (and the UID that the other data feed seems to use). If I can monitor train activations I can get the Trust ID. https://wiki.openraildata.com/index.php/Train_Activation
+
+However, when there's the same headcode in the region all with only one service code, there's no way I can find out which is the correct one is there?
+
+The service code for the correct train (to plymouth) never seemed to come up, it was always the one from birmingham to edinburgh or wherever. So the mystery is why is this service code never spotted in the area?
+
+
+------------------------------------------
+
+
 This has stuff about accesing and parsing TRUST service: https://github.com/naxxfish/nrod-funnel
+
+https://groups.google.com/g/openraildata-talk
 
 So train_id is actually the Trust ID, I should be able to look this up somewhere surely? Then I odn't have to rely on that spreadsheet of codes.
 So I think the edinburgh to birmingham is actually a cross country one to plymouth from scotaldn.

@@ -211,6 +211,10 @@ class MVTListener(stomp.ConnectionListener):
         last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
+            if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
+                print(message['body']['train_id'])
+                print("uid", message['body']['train_uid'])
+                
             msg = message['body']
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
