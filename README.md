@@ -4,6 +4,7 @@ However, when there's the same headcode in the region all with only one service 
 
 The service code for the correct train (to plymouth) never seemed to come up, it was always the one from birmingham to edinburgh or wherever. So the mystery is why is this service code never spotted in the area?
 
+Codes for the TD service are here: https://wiki.openraildata.com/index.php?title=C_Class_Messages
 
 ------------------------------------------
 
