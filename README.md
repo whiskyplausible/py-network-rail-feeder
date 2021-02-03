@@ -1,3 +1,5 @@
+Have computer running that records all activations and matches UIDs to Trust IDs (and maybe service codes?!)
+
 A train activation message contains the Trust ID (and the UID that the other data feed seems to use). If I can monitor train activations I can get the Trust ID. https://wiki.openraildata.com/index.php/Train_Activation
 
 However, when there's the same headcode in the region all with only one service code, there's no way I can find out which is the correct one is there?
