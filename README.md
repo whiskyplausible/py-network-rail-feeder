@@ -1,3 +1,7 @@
+So flow is -> Daily DB of service codes from the MVT service. Match train service code as I am now.
+Look up train service code from our DB, rather than the silly spreadsheet. Then look up the UID on the other API = perfect data!
+--------------------
+
 Have computer running that records all activations and matches UIDs to Trust IDs (and maybe service codes?!)
 
 A train activation message contains the Trust ID (and the UID that the other data feed seems to use). If I can monitor train activations I can get the Trust ID. https://wiki.openraildata.com/index.php/Train_Activation
