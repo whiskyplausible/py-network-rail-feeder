@@ -115,10 +115,10 @@ def lookup_by_uid(uid):
     try:
         req = requests.get(url, auth = HTTPBasicAuth(creds.RTT_USER, creds.RTT_PASS))
         print("received lookup back from rtt", req.text)
-        with open("uid_lookups.txt", "a") as fh: 
-            fh.write(req.text)
+        return req.json()
     except Exception as e: 
         print(e)        
+    return None
 
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
@@ -161,11 +161,17 @@ class TDListener(stomp.ConnectionListener):
                     logging.critical("Train arrived. "+ str(message))
                     try:
                         service_id = service_codes[train_ids[id]]
+                        train_lookup = "no lookup found"
                         for activation in activations:
                             if str(activations[activation]["train_service_code"]) == str(train_ids[id]):
                                 train_uid = activations[activation]["train_uid"]
-                                lookup_by_uid(train_uid)
-
+                                train_lookup = lookup_by_uid(train_uid)
+                        with open("uid_lookups.txt", "a") as fh:
+                            fh.write("service found: "+service_id+"\n")
+                            try:
+                                fh.write("response: "+train_lookup["origin"][0]["description"]+" "+ train_lookup["destination"][0]["description"]+"\n")
+                            except:
+                                fh.write("error when writing train_lookup\n")
                         logging.critical("Found service code "+train_ids[id])
                         logging.critical("Found service "+service_id)
                     except:
