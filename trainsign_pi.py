@@ -15,6 +15,9 @@ import creds
 import csv 
 import logging
 import datetime
+import sys
+import requests
+from requests.auth import HTTPBasicAuth 
 
 dev = True
 
@@ -55,6 +58,7 @@ train_ids = {}
 #     print ("couldn't load file")
 
 service_codes = {}
+activations = {}
 
 class RunText(): #SampleBase):
     def __init__(self, *args, **kwargs):
@@ -103,6 +107,19 @@ class RunText(): #SampleBase):
             time.sleep(0.05)
             offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
 
+def lookup_by_uid(uid):
+    time_now = datetime.datetime.now()
+    time_url = time_now.strftime("/%Y/%m/%d")
+    url = "http://api.rtt.io/api/v1/json/service/"+str(uid)+time_url
+    print("rtt url: ", url)
+    try:
+        req = requests.get(url, auth = HTTPBasicAuth(creds.RTT_USER, creds.RTT_PASS))
+        print("received lookup back from rtt", req.text)
+        with open("uid_lookups.txt", "a") as fh: 
+            fh.write(req.text)
+    except Exception as e: 
+        print(e)        
+
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
@@ -144,6 +161,11 @@ class TDListener(stomp.ConnectionListener):
                     logging.critical("Train arrived. "+ str(message))
                     try:
                         service_id = service_codes[train_ids[id]]
+                        for activation in activations:
+                            if str(activations[activation]["train_service_code"]) == str(train_ids[id]):
+                                train_uid = activations[activation]["train_uid"]
+                                lookup_by_uid(train_uid)
+
                         logging.critical("Found service code "+train_ids[id])
                         logging.critical("Found service "+service_id)
                     except:
@@ -211,11 +233,17 @@ class MVTListener(stomp.ConnectionListener):
         last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
-            if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
-                print(message['body']['train_id'])
-                print("uid", message['body']['train_uid'])
-                
             msg = message['body']
+            if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
+                activations[msg['train_id']] = {
+                    "train_uid": msg['train_uid'],
+                    "train_service_code": msg['train_service_code']
+                }
+                #print(sys.getsizeof(activations))
+                filehandler = open("activations", 'w') 
+                filehandler.write(json.dumps(activations, indent=4))
+                filehandler.close()
+
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
                 msg['next_report_stanox'][0:2] if 'next_report_stanox' in msg else "00",
