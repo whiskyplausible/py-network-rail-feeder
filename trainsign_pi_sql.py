@@ -52,6 +52,7 @@ train_fake = [False, False, False, False]
 print("time ", time.process_time())
 
 train_ids = {}
+train_uids = {}
 # try:
 #     filehandler = open("train_ids", 'rb') 
 #     train_ids = pickle.load(filehandler)
@@ -172,13 +173,9 @@ class TDListener(stomp.ConnectionListener):
                     try:
                         service_id = service_codes[train_ids[id]]
                         train_lookup = "no lookup found"
-
-                        for activation in activations:
-                            if str(activations[activation]["train_service_code"]) == str(train_ids[id]):
-                                act_service_code = str(activations[activation]["train_service_code"])
-                                train_uid = activations[activation]["train_uid"]
-                                train_lookup = lookup_by_uid(train_uid)
-
+                        train_lookup = lookup_by_uid(train_uids[id])
+                        print("found train, csv is: ", service_id)
+                        print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                         with open("uid_lookups.txt", "a") as fh:
                             fh.write("id found: "+id+"\n")
                             fh.write("train service code in activation:" + act_service_code)
@@ -277,19 +274,21 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
+
                 #print("train_id is ", msg["train_id"])
                 query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
                 cursor.execute(query, (str(msg["train_id"]),))
                 records = cursor.fetchall()
                 for record in records:
-                    print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
+                    #print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
+                    # try:
+                    #     print("match in service codes csv: ", service_codes[record[1]])
+                    # except:
+                    #     print("no match for service code in csv")
                     try:
-                        print("match in service codes csv: ", service_codes[record[1]])
-                    except:
-                        print("no match for service code in csv")
-                    try:
-                        train_lookup = lookup_by_uid(record[0])
-                        print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                        train_uids[msg["train_id"][2:6]] = record[0]
+                        #train_lookup = lookup_by_uid(record[0])
+                        #print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                     except:
                         print("no match for uid on lookup api")
 
