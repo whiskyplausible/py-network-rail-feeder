@@ -296,10 +296,10 @@ class MVTListener(stomp.ConnectionListener):
 
 
 ## Showing the data
-for record in records:
-    print(record)
-                #filehandler = open("train_ids", 'wb') 
-                #pickle.dump(train_ids, filehandler)
+# for record in records:
+#     print(record)
+#                 #filehandler = open("train_ids", 'wb') 
+#                 #pickle.dump(train_ids, filehandler)
 
 def make_connections():
     print("reset connections")
