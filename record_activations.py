@@ -15,6 +15,7 @@ import creds
 import csv 
 import logging
 import datetime
+import mysql.connector as mysql
 
 dev = False
 
@@ -52,6 +53,13 @@ train_ids = {}
 
 activations = {}
 
+db = mysql.connect(
+    host = "localhost",
+    user = "nikhil",
+    passwd = "Bd75W*0p1hB",
+    database = "trains"
+)
+cursor = db.cursor()
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
@@ -71,15 +79,20 @@ class MVTListener(stomp.ConnectionListener):
                     "train_service_code": msg['train_service_code']
                 }
 
-                filehandler = open("activations", 'w') 
-                filehandler.write(json.dumps(activations, indent=4))
-                filehandler.close()
-                #filehandler = open("train_ids", 'wb') 
-                #pickle.dump(train_ids, filehandler)
-                if str(msg['train_service_code']) == "22180008":
-                    filehandler = open("found_service_code.txt", 'w') 
-                    filehandler.write(json.dumps(msg, indent=4))
-                    filehandler.close()
+                query = "INSERT INTO activations (train_uid, train_service_code, train_id) VALUES (%s, %s, %s)"
+                values = (msg['train_uid'], msg['train_service_code'], msg['train_id'])
+                cursor.execute(query, values)
+                db.commit()
+                
+                # filehandler = open("activations", 'w') 
+                # filehandler.write(json.dumps(activations, indent=4))
+                # filehandler.close()
+                # #filehandler = open("train_ids", 'wb') 
+                # #pickle.dump(train_ids, filehandler)
+                # if str(msg['train_service_code']) == "22180008":
+                #     filehandler = open("found_service_code.txt", 'a') 
+                #     filehandler.write(json.dumps(msg, indent=4))
+                #     filehandler.close()
                     
 
 def make_connections():
