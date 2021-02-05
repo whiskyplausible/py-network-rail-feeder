@@ -1,12 +1,10 @@
 ## TODO
+## Show class and type of service on display.
+## Fallback to CSV file if can't find service
 ## Reset if lost network or stomp connection
-## Read only sd card (prob needs USB)
-## Remember to wipe the train ids thingy array every midnight
 ## If train not identified maybe show both IDs (at the moment just shows headcode)
 ## will that perf counter thing ever run out? Probs not.
-## Show weather or whatever other stuff when no train things happening...
 ## Update script
-## Train IDs still not quite there maybe, that Birmingham Service?
 
 import stomp
 import json
@@ -340,6 +338,8 @@ while 1:
     if now.strftime("%H:%M") == "00:00":
         train_ids = {}
         train_uids = {}
+        activations = {}
+
     if last_mvt_message + 30 < time.perf_counter() or last_td_message + 30 < time.perf_counter():
         logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
         last_mvt_message = time.perf_counter()
@@ -349,7 +349,6 @@ while 1:
     if show_trains and current_display != "TRAINS":
         current_display = "TRAINS"
         print("showing trains", train_text)
-
 
     if not show_trains and current_display == "TRAINS":
         current_display = "BLANK"
