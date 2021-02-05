@@ -120,11 +120,11 @@ class RunText(): #SampleBase):
 def lookup_by_uid(uid):
     time_now = datetime.datetime.now()
     time_url = time_now.strftime("/%Y/%m/%d")
-    url = "http://api.rtt.io/api/v1/json/service/"+str(uid)+time_url
-    print("rtt url: ", url)
+    url = "http://api.rtt.io/api/v1/json/service/"+str(uid).lstrip()+time_url
+    #print("rtt url: ", url)
     try:
         req = requests.get(url, auth = HTTPBasicAuth(creds.RTT_USER, creds.RTT_PASS))
-        print("received lookup back from rtt", req.text)
+        #print("received lookup back from rtt", req.text)
         return req.json()
     except Exception as e: 
         print(e)        
@@ -138,12 +138,12 @@ class TDListener(stomp.ConnectionListener):
         global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message
         last_td_message = time.perf_counter()
         try:
-            print(".", end='', flush=True)
+            #print(".", end='', flush=True)
             for message in json.loads(messages):
                 
                 if time.perf_counter() - start_time > 5 and not train_fake[0]:
                     train_fake[0] = True
-                    print("faking a train!")
+                    #print("faking a train!")
                     message = {
                         "CA_MSG": {
                             "area_id": "D9",
@@ -154,7 +154,7 @@ class TDListener(stomp.ConnectionListener):
 
                 if time.perf_counter() - start_time > 10 and not train_fake[2]:
                     train_fake[2] = True
-                    print("faking a train!")
+                    #print("faking a train!")
                     message = {
                         "CA_MSG": {
                             "area_id": "D9",
@@ -208,7 +208,7 @@ class TDListener(stomp.ConnectionListener):
 
                 if time.perf_counter() - start_time > 20 and not train_fake[1]:
                     train_fake[1] = True
-                    print("faking a train!")
+                    #print("faking a train!")
                     message = {
                         "CA_MSG": {
                             "area_id": "D9",
@@ -220,7 +220,7 @@ class TDListener(stomp.ConnectionListener):
 
                 if time.perf_counter() - start_time > 30 and not train_fake[3]:
                     train_fake[3] = True
-                    print("faking a train!")
+                    #print("faking a train!")
                     message = {
                         "CA_MSG": {
                             "area_id": "D9",
@@ -277,19 +277,19 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
-                print("train_id is ", msg["train_id"])
-                query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = '%s'"
-                cursor.execute(query, (str(msg["train_id"])))
+                #print("train_id is ", msg["train_id"])
+                query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
+                cursor.execute(query, (str(msg["train_id"]),))
                 records = cursor.fetchall()
                 for record in records:
-                    print("found a match in sql: ", record[0], record[1])
+                    print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
                     try:
                         print("match in service codes csv: ", service_codes[record[1]])
                     except:
                         print("no match for service code in csv")
                     try:
                         train_lookup = lookup_by_uid(record[0])
-                        print("match from lookup by uid ",train_lookup["origin"][0]["description"]+" "+ train_lookup["destination"][0]["description"])
+                        print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                     except:
                         print("no match for uid on lookup api")
 
