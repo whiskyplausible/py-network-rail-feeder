@@ -339,7 +339,7 @@ while 1:
 
     if now.strftime("%H:%M") == "00:00":
         train_ids = {}
-
+        train_uids = {}
     if last_mvt_message + 30 < time.perf_counter() or last_td_message + 30 < time.perf_counter():
         logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
         last_mvt_message = time.perf_counter()
