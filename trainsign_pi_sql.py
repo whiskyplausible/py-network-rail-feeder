@@ -278,7 +278,7 @@ class MVTListener(stomp.ConnectionListener):
                 logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
 
-                query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
+                query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = '%s'"
                 values = (msg["train_id"])
                 cursor.execute(query, values)
                 records = cursor.fetchall()
