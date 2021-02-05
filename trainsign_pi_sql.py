@@ -1,10 +1,11 @@
 ## TODO
 ## Show class and type of service on display.
+## Write protect SD card
 ## Fallback to CSV file if can't find service
-## Reset if lost network or stomp connection
+## Reset if lost network or stomp connection - possibly add a reboot here if we're not getting anything for ages within "daylight"
+## hours - so like do a "sudo reboot" and see if that helps. Or maybe just reboot ever night anyway!
 ## If train not identified maybe show both IDs (at the moment just shows headcode)
-## will that perf counter thing ever run out? Probs not.
-## Update script
+
 
 import stomp
 import json
