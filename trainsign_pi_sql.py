@@ -277,10 +277,9 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
-
+                print("train_id is ", msg["train_id"])
                 query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = '%s'"
-                values = (msg["train_id"],)
-                cursor.execute(query, values)
+                cursor.execute(query, (str(msg["train_id"])))
                 records = cursor.fetchall()
                 for record in records:
                     print("found a match in sql: ", record[0], record[1])
