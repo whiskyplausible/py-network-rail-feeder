@@ -279,8 +279,8 @@ class MVTListener(stomp.ConnectionListener):
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
 
                 query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
-                value = msg["train_id"]
-                cursor.execute(query, value)
+                values = (msg["train_id"])
+                cursor.execute(query, values)
                 records = cursor.fetchall()
                 for record in records:
                     print("found a match in sql: ", record[0], record[1])
