@@ -70,7 +70,6 @@ db = mysql.connect(
 )
 cursor = db.cursor()
 
-
 class RunText(): #SampleBase):
     def __init__(self, *args, **kwargs):
         print("init")
@@ -255,11 +254,11 @@ class MVTListener(stomp.ConnectionListener):
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
             msg = message['body']
-            # if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
-            #     activations[msg['train_id']] = {
-            #         "train_uid": msg['train_uid'],
-            #         "train_service_code": msg['train_service_code']
-            #     }
+            if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
+                activations[msg['train_id']] = {
+                    "train_uid": msg['train_uid'],
+                    "train_service_code": msg['train_service_code']
+                }
             #     #print(sys.getsizeof(activations))
             #     filehandler = open("activations", 'w') 
             #     filehandler.write(json.dumps(activations, indent=4))
@@ -287,6 +286,7 @@ class MVTListener(stomp.ConnectionListener):
                     #     print("no match for service code in csv")
                     try:
                         train_uids[msg["train_id"][2:6]] = record[0]
+                        train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
                         #train_lookup = lookup_by_uid(record[0])
                         #print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                     except:
