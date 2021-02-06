@@ -56,6 +56,8 @@ train_uids = {}
 try:
     filehandler = open("activations", 'rb') 
     activations = pickle.load(filehandler)
+    filehandler.close()
+    print(activations)
 except:
     print ("couldn't load file")
 
@@ -263,8 +265,10 @@ class MVTListener(stomp.ConnectionListener):
                     "train_uid": msg['train_uid'],
                     "train_service_code": msg['train_service_code']
                 }
-                filehandler = open("train_ids", 'wb') 
+
+                filehandler = open("activations", 'wb') 
                 pickle.dump(activations, filehandler)
+                filehandler.close()
 
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
