@@ -52,6 +52,8 @@ print("time ", time.process_time())
 
 train_ids = {}
 train_uids = {}
+activations = {}
+service_codes = {}
 
 try:
     filehandler = open("activations", 'rb') 
@@ -61,8 +63,6 @@ try:
 except:
     print ("couldn't load file")
 
-service_codes = {}
-activations = {}
 
 # db = mysql.connect(
 #     host = "localhost",
@@ -255,7 +255,7 @@ class MVTListener(stomp.ConnectionListener):
         print('received an error "%s"' % message)
         logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
-        global last_mvt_message, activations, train_ids, train_uids
+        global last_mvt_message, activations, train_ids, train_uids, activations
         last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
