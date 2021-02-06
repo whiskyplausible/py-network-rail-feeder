@@ -265,7 +265,7 @@ class MVTListener(stomp.ConnectionListener):
                     "train_uid": msg['train_uid'],
                     "train_service_code": msg['train_service_code']
                 }
-
+                print("adding this to actiations ", msg['traid_id'])
                 filehandler = open("activations", 'wb') 
                 pickle.dump(activations, filehandler)
                 filehandler.close()
