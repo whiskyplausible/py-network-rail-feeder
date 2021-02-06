@@ -52,11 +52,11 @@ print("time ", time.process_time())
 
 train_ids = {}
 train_uids = {}
-# try:
-#     filehandler = open("train_ids", 'rb') 
-#     train_ids = pickle.load(filehandler)
-# except:
-#     print ("couldn't load file")
+try:
+    filehandler = open("activations", 'rb') 
+    activations = pickle.load(filehandler)
+except:
+    print ("couldn't load file")
 
 service_codes = {}
 activations = {}
@@ -177,10 +177,10 @@ class TDListener(stomp.ConnectionListener):
                         
                         with open("uid_lookups.txt", "a") as fh:
                             fh.write("id found: "+id+"\n")
-                            fh.write("train service code in activation:" + act_service_code)
+                            fh.write("train service code in activation:" + service_id)
                             fh.write("service found: "+service_id+"\n")
                             fh.write("train_ids[id] ", train_ids[id])
-                            fh.write("service_code in activations: " + train_uid +"\n")
+                            fh.write("service_code in activations: " + train_lookup +"\n")
 
                             try:
                                 fh.write("response: "+train_lookup["origin"][0]["description"]+" "+ train_lookup["destination"][0]["description"]+"\n")
@@ -263,9 +263,9 @@ class MVTListener(stomp.ConnectionListener):
                     "train_service_code": msg['train_service_code']
                 }
             #     #print(sys.getsizeof(activations))
-            #     filehandler = open("activations", 'w') 
-            #     filehandler.write(json.dumps(activations, indent=4))
-            #     filehandler.close()
+                filehandler = open("activations", 'w') 
+                filehandler.write(json.dumps(activations, indent=4))
+                filehandler.close()
 
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
