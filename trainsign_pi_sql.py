@@ -6,7 +6,7 @@
 ## hours - so like do a "sudo reboot" and see if that helps. Or maybe just reboot ever night anyway!
 ## If train not identified maybe show both IDs (at the moment just shows headcode)
 
-
+import pickle
 import stomp
 import json
 import time
@@ -52,6 +52,7 @@ print("time ", time.process_time())
 
 train_ids = {}
 train_uids = {}
+
 try:
     filehandler = open("activations", 'rb') 
     activations = pickle.load(filehandler)
@@ -262,10 +263,8 @@ class MVTListener(stomp.ConnectionListener):
                     "train_uid": msg['train_uid'],
                     "train_service_code": msg['train_service_code']
                 }
-            #     #print(sys.getsizeof(activations))
-                filehandler = open("activations", 'w') 
-                filehandler.write(json.dumps(activations, indent=4))
-                filehandler.close()
+                filehandler = open("train_ids", 'wb') 
+                pickle.dump(activations, filehandler)
 
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
