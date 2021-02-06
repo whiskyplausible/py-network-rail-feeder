@@ -265,7 +265,7 @@ class MVTListener(stomp.ConnectionListener):
                     "train_uid": msg['train_uid'],
                     "train_service_code": msg['train_service_code']
                 }
-                print("adding this to actiations ", msg['train_id'])
+                #print("adding this to actiations ", msg['train_id'])
                 filehandler = open("activations", 'wb') 
                 pickle.dump(activations, filehandler)
                 filehandler.close()
@@ -281,6 +281,7 @@ class MVTListener(stomp.ConnectionListener):
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
+                    print("successful train id")
                 else:
                     print("couldn't find key ", msg["train_id"], " in activations...")
 
