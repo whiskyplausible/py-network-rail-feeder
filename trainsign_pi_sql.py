@@ -255,7 +255,7 @@ class MVTListener(stomp.ConnectionListener):
         print('received an error "%s"' % message)
         logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
-        global last_mvt_message
+        global last_mvt_message, activations, train_ids, train_uids
         last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
@@ -279,11 +279,11 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
-
-                try:
+                if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                except Exception as e:
-                    print("no match for uid in activations dict", e)
+                else:
+                    print("couldn't find key ", msg["train_id"], " in activations...")
+
 
 
                 # #print("train_id is ", msg["train_id"])
