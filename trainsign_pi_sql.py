@@ -59,7 +59,7 @@ try:
     filehandler = open("activations", 'rb') 
     activations = pickle.load(filehandler)
     filehandler.close()
-    print(activations)
+    #print(activations)
 except:
     print ("couldn't load file")
 
@@ -281,10 +281,10 @@ class MVTListener(stomp.ConnectionListener):
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                    print("successful train id")
+                    #print("successful train id")
                 else:
-                    print("couldn't find key ", msg["train_id"], " in activations...")
-
+                    #print("couldn't find key ", msg["train_id"], " in activations...")
+                    pass
 
 
                 # #print("train_id is ", msg["train_id"])
