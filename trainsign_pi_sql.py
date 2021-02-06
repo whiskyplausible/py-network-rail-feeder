@@ -61,13 +61,13 @@ train_uids = {}
 service_codes = {}
 activations = {}
 
-db = mysql.connect(
-    host = "localhost",
-    user = "nikhil",
-    passwd = "Bd75W*0p1hB",
-    database = "trains"
-)
-cursor = db.cursor()
+# db = mysql.connect(
+#     host = "localhost",
+#     user = "nikhil",
+#     passwd = "Bd75W*0p1hB",
+#     database = "trains"
+# )
+# cursor = db.cursor()
 
 class RunText(): #SampleBase):
     def __init__(self, *args, **kwargs):
@@ -174,6 +174,7 @@ class TDListener(stomp.ConnectionListener):
                         train_lookup = lookup_by_uid(train_uids[id])
                         print("found train, csv is: ", service_id)
                         print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                        
                         with open("uid_lookups.txt", "a") as fh:
                             fh.write("id found: "+id+"\n")
                             fh.write("train service code in activation:" + act_service_code)
@@ -186,7 +187,10 @@ class TDListener(stomp.ConnectionListener):
                             except:
                                 fh.write("error when writing train_lookup\n")
                         logging.critical("Found service code "+train_ids[id])
+                        
                         logging.critical("Found service "+service_id)
+                        logging.critical("match from lookup by uid origin: "+train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                        
                     except:
                         service_id = id # show service code here too if poss?
                         if id in train_ids:
@@ -270,26 +274,32 @@ class MVTListener(stomp.ConnectionListener):
             ]
             
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
-                logging.critical("found a relevant service "+str(msg))
+                #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
 
-                #print("train_id is ", msg["train_id"])
-                query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
-                cursor.execute(query, (str(msg["train_id"]),))
-                records = cursor.fetchall()
-                for record in records:
-                    #print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
-                    # try:
-                    #     print("match in service codes csv: ", service_codes[record[1]])
-                    # except:
-                    #     print("no match for service code in csv")
-                    try:
-                        train_uids[msg["train_id"][2:6]] = record[0]
-                        train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                        #train_lookup = lookup_by_uid(record[0])
-                        #print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-                    except:
-                        print("no match for uid on lookup api")
+                try:
+                    train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
+                except Exception as e:
+                    print("no match for uid in activations dict", e)
+
+
+                # #print("train_id is ", msg["train_id"])
+                # query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
+                # cursor.execute(query, (str(msg["train_id"]),))
+                # records = cursor.fetchall()
+                # for record in records:
+                #     #print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
+                #     # try:
+                #     #     print("match in service codes csv: ", service_codes[record[1]])
+                #     # except:
+                #     #     print("no match for service code in csv")
+                #     try:
+                #         train_uids[msg["train_id"][2:6]] = record[0]
+                #         train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
+                #         #train_lookup = lookup_by_uid(record[0])
+                #         #print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                #     except Exception as e:
+                #         print("no match for uid on lookup api", e)
 
 
 ## Showing the data
