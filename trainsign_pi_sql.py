@@ -22,6 +22,7 @@ from requests.auth import HTTPBasicAuth
 #import mysql.connector as mysql
 
 dev = False
+useDisk = True
 
 if not dev:
     from samplebase import SampleBase
@@ -59,32 +60,30 @@ service_codes = {}
 mvt_led = False
 td_led = False
 
-try:
-    filehandler = open("activations", 'rb') 
-    activations = pickle.load(filehandler)
-    filehandler.close()
-    #print(activations)
-except:
-    print ("couldn't load file: activations")
+if useDisk:
+    try:
+        filehandler = open("activations", 'rb') 
+        activations = pickle.load(filehandler)
+        filehandler.close()
+        #print(activations)
+    except:
+        print ("couldn't load file: activations")
 
-try:
-    filehandler = open("train_ids", 'rb') 
-    train_ids = pickle.load(filehandler)
-    filehandler.close()
-    #print(activations)
-except:
-    print ("couldn't load file: train_ids")
+    try:
+        filehandler = open("train_ids", 'rb') 
+        train_ids = pickle.load(filehandler)
+        filehandler.close()
+        #print(activations)
+    except:
+        print ("couldn't load file: train_ids")
 
-try:
-    filehandler = open("train_uids", 'rb') 
-    train_uids = pickle.load(filehandler)
-    filehandler.close()
-    #print(activations)
-except:
-    print ("couldn't load file: train_uids")
-
-
-
+    try:
+        filehandler = open("train_uids", 'rb') 
+        train_uids = pickle.load(filehandler)
+        filehandler.close()
+        #print(activations)
+    except:
+        print ("couldn't load file: train_uids")
 
 # db = mysql.connect(
 #     host = "localhost",
@@ -285,9 +284,10 @@ class MVTListener(stomp.ConnectionListener):
                     "train_service_code": msg['train_service_code']
                 }
                 #print("adding this to actiations ", msg['train_id'])
-                filehandler = open("activations", 'wb') 
-                pickle.dump(activations, filehandler)
-                filehandler.close()
+                if useDisk:
+                    filehandler = open("activations", 'wb') 
+                    pickle.dump(activations, filehandler)
+                    filehandler.close()
 
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
@@ -298,17 +298,19 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
-                filehandler = open("train_ids", 'wb') 
-                pickle.dump(train_ids, filehandler)
-                filehandler.close()
+                if useDisk:
+                    filehandler = open("train_ids", 'wb') 
+                    pickle.dump(train_ids, filehandler)
+                    filehandler.close()
 
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
                     print("added detected train_uid: ", msg["train_id"][2:6])
+                    if useDisk:
+                        filehandler = open("train_uids", 'wb') 
+                        pickle.dump(train_uids, filehandler)
+                        filehandler.close()
 
-                    filehandler = open("train_uids", 'wb') 
-                    pickle.dump(train_uids, filehandler)
-                    filehandler.close()
                     #print("successful train id")
                 else:
                     print("couldn't find key ", msg["train_id"], " in activations...")
