@@ -170,7 +170,12 @@ class RunText(SampleBase): #SampleBase):
 def check_internet():
     global internet_on
     while 1:
-        internet_on = internet()
+        i_check = internet()
+        if not i_check:
+            time.sleep(5)
+            internet_on = internet()
+        else:
+            internet_on = True
         time.sleep(30)
 
 def lookup_by_uid(uid):
