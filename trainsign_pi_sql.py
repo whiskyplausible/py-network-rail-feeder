@@ -168,6 +168,7 @@ class RunText(SampleBase): #SampleBase):
             offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
 
 def check_internet():
+    global internet_on
     while 1:
         internet_on = internet()
         time.sleep(30)
