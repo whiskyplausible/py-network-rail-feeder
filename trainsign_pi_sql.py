@@ -17,6 +17,7 @@ import logging
 import datetime
 import sys
 import requests
+import traceback
 from requests.auth import HTTPBasicAuth 
 #import mysql.connector as mysql
 
@@ -64,7 +65,25 @@ try:
     filehandler.close()
     #print(activations)
 except:
-    print ("couldn't load file")
+    print ("couldn't load file: activations")
+
+try:
+    filehandler = open("train_ids", 'rb') 
+    train_ids = pickle.load(filehandler)
+    filehandler.close()
+    #print(activations)
+except:
+    print ("couldn't load file: train_ids")
+
+try:
+    filehandler = open("train_uids", 'rb') 
+    train_uids = pickle.load(filehandler)
+    filehandler.close()
+    #print(activations)
+except:
+    print ("couldn't load file: train_uids")
+
+
 
 
 # db = mysql.connect(
@@ -179,36 +198,24 @@ class TDListener(stomp.ConnectionListener):
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                     show_trains = True
                     
-                    #print(B+ str(message))
                     id = message["CA_MSG"]["descr"]
-                    logging.critical("Train arrived. "+ str(message))
-                    try:
-                        service_id = service_codes[train_ids[id]]
-                        train_lookup = "no lookup found"
-                        train_lookup = lookup_by_uid(train_uids[id])
-                        print("found train, csv is: ", service_id)
-                        print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-                        
-                        with open("uid_lookups.txt", "a") as fh:
-                            fh.write("id found: "+id+"\n")
-                            fh.write("train service code in activation:" + service_id)
-                            fh.write("service found: "+service_id+"\n")
-                            fh.write("train_ids[id] ", train_ids[id])
-                            fh.write("service_code in activations: " + train_lookup +"\n")
+                    service_id = id                    
+                    logging.critical("Train arrived at monitored berths. "+ str(message))
 
-                            try:
-                                fh.write("response: "+train_lookup["origin"][0]["description"]+" "+ train_lookup["destination"][0]["description"]+"\n")
-                            except:
-                                fh.write("error when writing train_lookup\n")
-                        logging.critical("Found service code "+train_ids[id])
-                        
-                        logging.critical("Found service "+service_id)
-                        logging.critical("match from lookup by uid origin: "+train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-                        
-                    except:
-                        service_id = id # show service code here too if poss?
-                        if id in train_ids:
-                            logging.critical("Failed to find service, but found this train ID "+train_ids[id])
+                    if id in train_ids and train_ids[id] in service_codes:
+                        service_id = service_codes[train_ids[id]]
+                        print("service code found in csv ", id, service_id)
+                    else:
+                        print("found id in csv service codes: ", train_ids[id])
+
+                    if id in train_uids:
+                        print("Found id in train_uids, trying api lookup")
+                        try:
+                            train_lookup = lookup_by_uid(train_uids[id])
+                            print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                            service_id = train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
+                        except Exception:
+                            print("train lookup failed: ", traceback.format_exc())
 
                     if message["CA_MSG"]["to"] == "2021":
                         train_text[1] = service_id
@@ -259,6 +266,7 @@ class TDListener(stomp.ConnectionListener):
         
         except:
             logging.critical("this is an exception", exc_info=True) 
+            print("error in td loop: ", traceback.format_exc())
 
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
@@ -290,11 +298,20 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
+                filehandler = open("train_ids", 'wb') 
+                pickle.dump(train_ids, filehandler)
+                filehandler.close()
+
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
+                    print("added detected train_uid: ", msg["train_id"][2:6])
+
+                    filehandler = open("train_uids", 'wb') 
+                    pickle.dump(train_uids, filehandler)
+                    filehandler.close()
                     #print("successful train id")
                 else:
-                    #print("couldn't find key ", msg["train_id"], " in activations...")
+                    print("couldn't find key ", msg["train_id"], " in activations...")
                     pass
 
 
