@@ -1,7 +1,6 @@
 ## TODO
 ## Show class and type of service on display.
 ## Write protect SD card
-## Single LEDs to show API status
 ## Fallback to CSV file if can't find service
 ## Reset if lost network or stomp connection - possibly add a reboot here if we're not getting anything for ages within "daylight"
 ## hours - so like do a "sudo reboot" and see if that helps. Or maybe just reboot ever night anyway!
@@ -15,9 +14,11 @@ import creds
 import csv 
 import logging
 import datetime
-import sys
+import os
+import socket
 import requests
 import traceback
+import _thread
 from requests.auth import HTTPBasicAuth 
 #import mysql.connector as mysql
 
@@ -59,6 +60,8 @@ activations = {}
 service_codes = {}
 mvt_led = False
 td_led = False
+api_led = False
+internet_on = False
 
 if useDisk:
     try:
@@ -92,6 +95,20 @@ if useDisk:
 #     database = "trains"
 # )
 # cursor = db.cursor()
+
+def internet(host="8.8.8.8", port=53, timeout=3):
+    """
+    Host: 8.8.8.8 (google-public-dns-a.google.com)
+    OpenPort: 53/tcp
+    Service: domain (DNS/TCP)
+    """
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        return True
+    except socket.error as ex:
+        print(ex)
+        return False
 
 class RunText(SampleBase): #SampleBase):
     def __init__(self, *args, **kwargs):
@@ -132,6 +149,7 @@ class RunText(SampleBase): #SampleBase):
 
             for box in range(0,21):
                 graphics.DrawLine(offscreen_canvas,0,box, 35,box,graphics.Color(0,0,0))
+
             graphics.DrawText(offscreen_canvas, font, 0, 10, dirColor, "NORTH")
             graphics.DrawText(offscreen_canvas, font, 0, 21, dirColor, "SOUTH")
             graphics.DrawText(offscreen_canvas, timeFont, 72, 30, redColor, timeNow)
@@ -142,10 +160,22 @@ class RunText(SampleBase): #SampleBase):
             if mvt_led:
                 graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,255))
 
+            if api_led:
+                graphics.DrawLine(offscreen_canvas,2,0,2,0,graphics.Color(0,255,0))
+
             if brightness < 251:
                 brightness+=4
             time.sleep(0.05)
+
+            if not internet_on:
+                graphics.DrawText(offscreen_canvas, timeFont, 72, 15, redColor, "No internet")
+                
             offscreen_canvas = self.matrix.SwapOnVSync(offscreen_canvas)
+
+def check_internet():
+    while 1:
+        internet_on = internet()
+        time.sleep(30)
 
 def lookup_by_uid(uid):
     time_now = datetime.datetime.now()
@@ -155,9 +185,15 @@ def lookup_by_uid(uid):
     try:
         req = requests.get(url, auth = HTTPBasicAuth(creds.RTT_USER, creds.RTT_PASS))
         #print("received lookup back from rtt", req.text)
+        api_led = False
+        if req.status_code != 200:
+            api_led = True
         return req.json()
+
     except Exception as e: 
         print(e)        
+        api_led = True
+
     return None
 
 class TDListener(stomp.ConnectionListener):
@@ -212,9 +248,35 @@ class TDListener(stomp.ConnectionListener):
                         try:
                             train_lookup = lookup_by_uid(train_uids[id])
                             print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-                            service_id = train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
+
+                            service_id = train_lookup["atocName"]  + " [" + train_lookup['powerType'] + "] "
+                            service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
+ 
                         except Exception:
                             print("train lookup failed: ", traceback.format_exc())
+
+                    id_type = "?"
+                    if id[0] == "1":
+                        id_type = "High speed passenger"
+                    if id[0:2] == "1Q":
+                        id_type = "Test train"
+                    if id[0:2] == "1Z":
+                        id_type = "Charter"
+                    if id[0] == "2":
+                        id_type = "Slow passenger"
+                    if id[0] == "3":
+                        id_type = "Priority ECS/parcels/weather related"
+                    if id[0] == "4":
+                        id_type = "Fast freight"
+                    if id[0] == "5":
+                        id_type = "Empty passenger stock"
+                    if id[0] == "6":
+                        id_type = "Slow aggregates freight"
+                    if id[0] == "7":
+                        id_type = "Very slow freight"
+                    if id[0] == "8":
+                        id_type = "Weather related/very slow"
+                    service_id += " (" + id_type + ")"
 
                     if message["CA_MSG"]["to"] == "2021":
                         train_text[1] = service_id
@@ -369,6 +431,8 @@ with open('./train_service_codes/service_codes.csv') as csv_file:
             service_codes[row[0]] = row[1]
             line_count += 1
 
+_thread.start_new_thread(check_internet, ())
+
 make_connections()
 
 if not dev:
@@ -391,6 +455,9 @@ while 1:
         last_td_message = time.perf_counter()
         make_connections()
 
+    if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
+        os.system("sudo reboot")
+
     if show_trains and current_display != "TRAINS":
         current_display = "TRAINS"
         print("showing trains", train_text)
@@ -408,7 +475,6 @@ while 1:
         train_change = False   
         print("train has now passed by")
         
-
     if train_text[0] and train_last_seen[0] + 300 < time.perf_counter() - start_time:
         train_text[0] = ""
         train_last_seen[0] = 0
