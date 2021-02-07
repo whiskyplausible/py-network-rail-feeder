@@ -1,6 +1,7 @@
 ## TODO
 ## Show class and type of service on display.
 ## Write protect SD card
+## Single LEDs to show API status
 ## Fallback to CSV file if can't find service
 ## Reset if lost network or stomp connection - possibly add a reboot here if we're not getting anything for ages within "daylight"
 ## hours - so like do a "sudo reboot" and see if that helps. Or maybe just reboot ever night anyway!
@@ -17,9 +18,9 @@ import datetime
 import sys
 import requests
 from requests.auth import HTTPBasicAuth 
-import mysql.connector as mysql
+#import mysql.connector as mysql
 
-dev = True
+dev = False
 
 if not dev:
     from samplebase import SampleBase
@@ -54,6 +55,8 @@ train_ids = {}
 train_uids = {}
 activations = {}
 service_codes = {}
+mvt_led = False
+td_led = False
 
 try:
     filehandler = open("activations", 'rb') 
@@ -72,7 +75,7 @@ except:
 # )
 # cursor = db.cursor()
 
-class RunText(): #SampleBase):
+class RunText(SampleBase): #SampleBase):
     def __init__(self, *args, **kwargs):
         print("init")
         super(RunText, self).__init__(*args, **kwargs)
@@ -114,6 +117,13 @@ class RunText(): #SampleBase):
             graphics.DrawText(offscreen_canvas, font, 0, 10, dirColor, "NORTH")
             graphics.DrawText(offscreen_canvas, font, 0, 21, dirColor, "SOUTH")
             graphics.DrawText(offscreen_canvas, timeFont, 72, 30, redColor, timeNow)
+
+            if td_led:
+                graphics.DrawLine(offscreen_canvas,0,0,0,0,graphics.Color(255,0,0))
+
+            if mvt_led:
+                graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,255))
+
             if brightness < 251:
                 brightness+=4
             time.sleep(0.05)
@@ -137,33 +147,34 @@ class TDListener(stomp.ConnectionListener):
         print('received an error "%s"' % message)
         logging.critical("Error in TDListener "+str(message))
     def on_message(self, headers, messages):
-        global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message
+        global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message, td_led
+        td_led = not td_led
         last_td_message = time.perf_counter()
         try:
             #print(".", end='', flush=True)
             for message in json.loads(messages):
                 
-                if time.perf_counter() - start_time > 5 and not train_fake[0]:
-                    train_fake[0] = True
-                    #print("faking a train!")
-                    message = {
-                        "CA_MSG": {
-                            "area_id": "D9",
-                            "to": "2018",
-                            "descr": "0101"
-                        }
-                    }
+                # if time.perf_counter() - start_time > 5 and not train_fake[0]:
+                #     train_fake[0] = True
+                #     #print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2018",
+                #             "descr": "0101"
+                #         }
+                #     }
 
-                if time.perf_counter() - start_time > 10 and not train_fake[2]:
-                    train_fake[2] = True
-                    #print("faking a train!")
-                    message = {
-                        "CA_MSG": {
-                            "area_id": "D9",
-                            "to": "2021",
-                            "descr": "aaaa"
-                        }
-                    }
+                # if time.perf_counter() - start_time > 10 and not train_fake[2]:
+                #     train_fake[2] = True
+                #     #print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2021",
+                #             "descr": "aaaa"
+                #         }
+                #     }
 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                     show_trains = True
@@ -208,28 +219,28 @@ class TDListener(stomp.ConnectionListener):
 
                     train_change = True
 
-                if time.perf_counter() - start_time > 20 and not train_fake[1]:
-                    train_fake[1] = True
-                    #print("faking a train!")
-                    message = {
-                        "CA_MSG": {
-                            "area_id": "D9",
-                            "to": "2016",
-                            "descr": "0101"
-                        }
-                    }
+                # if time.perf_counter() - start_time > 20 and not train_fake[1]:
+                #     train_fake[1] = True
+                #     #print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2016",
+                #             "descr": "0101"
+                #         }
+                #     }
 
 
-                if time.perf_counter() - start_time > 30 and not train_fake[3]:
-                    train_fake[3] = True
-                    #print("faking a train!")
-                    message = {
-                        "CA_MSG": {
-                            "area_id": "D9",
-                            "to": "2023",
-                            "descr": "aaaa"
-                        }
-                    }
+                # if time.perf_counter() - start_time > 30 and not train_fake[3]:
+                #     train_fake[3] = True
+                #     #print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2023",
+                #             "descr": "aaaa"
+                #         }
+                #     }
 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
                     if message["CA_MSG"]["to"] == "2023":
@@ -250,12 +261,12 @@ class TDListener(stomp.ConnectionListener):
             logging.critical("this is an exception", exc_info=True) 
 
 class MVTListener(stomp.ConnectionListener):
-
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
         logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
-        global last_mvt_message, activations, train_ids, train_uids, activations
+        global last_mvt_message, activations, train_ids, train_uids, activations, mvt_led
+        mvt_led = not mvt_led
         last_mvt_message = time.perf_counter()
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
