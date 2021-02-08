@@ -1,5 +1,7 @@
 ## TODO
 ## Write protect SD card
+## Turn off disk logging.
+## some external logging?!
 
 import pickle
 import stomp
@@ -18,7 +20,7 @@ from requests.auth import HTTPBasicAuth
 #import mysql.connector as mysql
 
 dev = False
-useDisk = True
+useDisk = False
 
 if not dev:
     from samplebase import SampleBase
@@ -281,10 +283,10 @@ class TDListener(stomp.ConnectionListener):
 
                     if message["CA_MSG"]["to"] == "2021":
                         train_text[1] = service_id
-                        train_last_seen[1] = time.perf_counter() - start_time
+                        train_last_seen[1] = time.perf_counter() 
                     else:
                         train_text[0] = service_id
-                        train_last_seen[0] = time.perf_counter() - start_time
+                        train_last_seen[0] = time.perf_counter() 
 
                     train_change = True
 
@@ -368,7 +370,7 @@ class MVTListener(stomp.ConnectionListener):
 
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                    print("added detected train_uid: ", msg["train_id"][2:6])
+                    #print("added detected train_uid: ", msg["train_id"][2:6])
                     if useDisk:
                         filehandler = open("train_uids", 'wb') 
                         pickle.dump(train_uids, filehandler)
@@ -476,12 +478,12 @@ while 1:
         train_change = False   
         print("train has now passed by")
         
-    if train_text[0] and train_last_seen[0] + 300 < time.perf_counter() - start_time:
+    if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
         train_text[0] = ""
         train_last_seen[0] = 0
         print("north bound train time out")
 
-    if train_text[1] and train_last_seen[1] + 300 < time.perf_counter() - start_time:
+    if train_text[1] and train_last_seen[1] + 300 < time.perf_counter():
         train_text[1] = ""
         train_last_seen[1] = 0
         print("south bound train time out")
