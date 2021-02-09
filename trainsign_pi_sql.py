@@ -2,6 +2,7 @@
 ## Write protect SD card
 ## Turn off disk logging.
 ## some external logging?!
+## Dim status LEDs - maybe move to bottom of screen?
 
 import pickle
 import stomp
