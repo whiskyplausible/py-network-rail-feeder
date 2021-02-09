@@ -144,7 +144,7 @@ class RunText(SampleBase): #SampleBase):
             if (posS + lenS < 35):
                 posS = offscreen_canvas.width
 
-            for box in range(0,21):
+            for box in range(0,24):
                 graphics.DrawLine(offscreen_canvas,0,box, 35,box,graphics.Color(0,0,0))
 
             graphics.DrawText(offscreen_canvas, font, 0, 10, dirColor, "NORTH")
@@ -199,6 +199,11 @@ def lookup_by_uid(uid):
 
     return None
 
+def get_dt():
+    now = datetime.datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    return dt_string
+
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
@@ -242,21 +247,27 @@ class TDListener(stomp.ConnectionListener):
 
                     if id in train_ids and train_ids[id] in service_codes:
                         service_id = service_codes[train_ids[id]]
-                        print("service code found in csv ", id, service_id)
+                        print(get_dt(), "service code found in csv ", id, service_id)
                     else:
-                        print("found id in csv service codes: ", train_ids[id])
+                        print(get_dt(), "Couldn't find id in csv service codes: ", id)
 
                     if id in train_uids:
-                        print("Found id in train_uids, trying api lookup")
+                        print(get_dt(), "Found id in train_uids, trying api lookup")
+                        train_lookup = None
                         try:
                             train_lookup = lookup_by_uid(train_uids[id])
-                            print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-
-                            service_id = train_lookup["atocName"]  + " [" + train_lookup['powerType'] + "] "
+                            print(get_dt(), "match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
+                            atocName = "" if train_lookup["atocName"] == "Unknown" else train_lookup["atocName"]
+                            service_id = atocName + " [" + train_lookup['powerType'] + "] "
                             service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
  
                         except Exception:
-                            print("train lookup failed: ", traceback.format_exc())
+                            print(get_dt(), "train lookup failed: ", traceback.format_exc())
+                            f = open("api_failures.log", "a")
+                            f.write(str(train_lookup))
+                            f.write("\n\n")
+                            f.close()
+
 
                     id_type = "?"
                     if id[0] == "1":
@@ -317,11 +328,11 @@ class TDListener(stomp.ConnectionListener):
                     if message["CA_MSG"]["to"] == "2023":
                         train_text[1] = ""
                         train_last_seen[1] = 0
-                        print("train has passed south")
+                        print(get_dt(), "train has passed south")
                     else:
                         train_text[0] = ""
                         train_last_seen[0] = 0
-                        print("train has passed north")
+                        print(get_dt(), "train has passed north")
 
                     if train_text[0] == "" and train_text[1] == "":
                         show_trains = False
@@ -330,7 +341,7 @@ class TDListener(stomp.ConnectionListener):
         
         except:
             logging.critical("this is an exception", exc_info=True) 
-            print("error in td loop: ", traceback.format_exc())
+            print(get_dt(), "error in td loop: ", traceback.format_exc())
 
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
@@ -343,6 +354,7 @@ class MVTListener(stomp.ConnectionListener):
         #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
             msg = message['body']
+
             if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
                 activations[msg['train_id']] = {
                     "train_uid": msg['train_uid'],
@@ -361,6 +373,7 @@ class MVTListener(stomp.ConnectionListener):
             ]
             
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
+                
                 #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 if useDisk:
@@ -378,7 +391,7 @@ class MVTListener(stomp.ConnectionListener):
 
                     #print("successful train id")
                 else:
-                    print("couldn't find key ", msg["train_id"], " in activations...")
+                    #print("couldn't find key ", msg["train_id"], " in activations...")
                     pass
 
 
@@ -408,7 +421,7 @@ class MVTListener(stomp.ConnectionListener):
 #                 #pickle.dump(train_ids, filehandler)
 
 def make_connections():
-    print("reset connections")
+    print(get_dt(), "reset connections")
     logging.critical("resetting connections") 
     td_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
     td_conn.set_listener('', TDListener())
@@ -448,6 +461,7 @@ while 1:
     now = datetime.datetime.now()
 
     if now.strftime("%H:%M") == "00:00":
+        print(get_dt(), "wiping variables as is midnight")
         train_ids = {}
         train_uids = {}
         activations = {}
@@ -463,30 +477,30 @@ while 1:
 
     if show_trains and current_display != "TRAINS":
         current_display = "TRAINS"
-        print("showing trains", train_text)
+        print(get_dt(), "showing trains", train_text)
 
     if not show_trains and current_display == "TRAINS":
         current_display = "BLANK"
-        print("display off")
+        print(get_dt(), "display off")
 
     if train_change and show_trains:
         train_change = False
-        print("train approaching")
+        print(get_dt(), "train approaching")
         print(train_text)
 
     if train_change and not show_trains:
         train_change = False   
-        print("train has now passed by")
+        print(get_dt(), "train has now passed by")
         
     if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
         train_text[0] = ""
         train_last_seen[0] = 0
-        print("north bound train time out")
+        print(get_dt(), "north bound train time out")
 
     if train_text[1] and train_last_seen[1] + 300 < time.perf_counter():
         train_text[1] = ""
         train_last_seen[1] = 0
-        print("south bound train time out")
+        print(get_dt(), "south bound train time out")
 
     if train_text[0] == "" and train_text[1] == "":
         show_trains = False
