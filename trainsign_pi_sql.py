@@ -229,7 +229,7 @@ class TDListener(stomp.ConnectionListener):
                     possible_uid = None
                     is_in_uids = id in train_uids
                     for activation in activations:
-                        if activation[2:6] == id and not is_in_uids:
+                        if activation[2:6] == id and not is_in_uids and service_id == id:
                             possible_uid = activations[activation]["train_uid"]
 
                     if is_in_uids or possible_uid:
@@ -238,6 +238,7 @@ class TDListener(stomp.ConnectionListener):
                         try:
                             if possible_uid:
                                 train_lookup = lookup_by_uid(possible_uid)
+                                print("Couldn't find this train in uids, so making a guess it might be this one by checking activations.")
                             else:
                                 train_lookup = lookup_by_uid(train_uids[id])
 
@@ -287,6 +288,7 @@ class TDListener(stomp.ConnectionListener):
                         train_last_seen[0] = time.perf_counter() 
 
                     train_change = True
+                    print("************************************************************")
 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
                     if message["CA_MSG"]["to"] == "2023":
