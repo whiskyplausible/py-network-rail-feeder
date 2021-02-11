@@ -50,8 +50,6 @@ last_mvt_message = start_time
 
 train_fake = [False, False, False, False]
 
-print("time ", time.process_time())
-
 train_ids = {}
 train_uids = {}
 activations = {}
@@ -66,7 +64,6 @@ if useDisk:
         filehandler = open("activations", 'rb') 
         activations = pickle.load(filehandler)
         filehandler.close()
-        #print(activations)
     except:
         print ("couldn't load file: activations")
 
@@ -74,7 +71,6 @@ if useDisk:
         filehandler = open("train_ids", 'rb') 
         train_ids = pickle.load(filehandler)
         filehandler.close()
-        #print(activations)
     except:
         print ("couldn't load file: train_ids")
 
@@ -82,24 +78,10 @@ if useDisk:
         filehandler = open("train_uids", 'rb') 
         train_uids = pickle.load(filehandler)
         filehandler.close()
-        #print(activations)
     except:
         print ("couldn't load file: train_uids")
 
-# db = mysql.connect(
-#     host = "localhost",
-#     user = "nikhil",
-#     passwd = "Bd75W*0p1hB",
-#     database = "trains"
-# )
-# cursor = db.cursor()
-
 def internet(host="8.8.8.8", port=53, timeout=3):
-    """
-    Host: 8.8.8.8 (google-public-dns-a.google.com)
-    OpenPort: 53/tcp
-    Service: domain (DNS/TCP)
-    """
     try:
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
@@ -185,10 +167,8 @@ def lookup_by_uid(uid):
     time_now = datetime.datetime.now()
     time_url = time_now.strftime("/%Y/%m/%d")
     url = "http://api.rtt.io/api/v1/json/service/"+str(uid).lstrip()+time_url
-    #print("rtt url: ", url)
     try:
         req = requests.get(url, auth = HTTPBasicAuth(creds.RTT_USER, creds.RTT_PASS))
-        #print("received lookup back from rtt", req.text)
         api_led = False
         if req.status_code != 200:
             api_led = True
@@ -205,6 +185,23 @@ def get_dt():
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     return dt_string
 
+def get_dt_file():
+    now = datetime.datetime.now()
+    dt_string = now.strftime("%d-%m-%Y-%H-%M-%S")
+    return dt_string
+
+
+def log_everything():
+    filehandler = open("activations_"+get_dt_file(), 'w') 
+    filehandler.write(json.dumps(activations, indent=4))
+    filehandler.close()
+    filehandler = open("train_uids_"+get_dt_file(), 'w') 
+    filehandler.write(json.dumps(train_uids, indent=4))
+    filehandler.close()
+    filehandler = open("train_ids_"+get_dt_file(), 'w') 
+    filehandler.write(json.dumps(train_ids, indent=4))
+    filehandler.close()
+
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
@@ -214,30 +211,7 @@ class TDListener(stomp.ConnectionListener):
         td_led = not td_led
         last_td_message = time.perf_counter()
         try:
-            #print(".", end='', flush=True)
             for message in json.loads(messages):
-                
-                # if time.perf_counter() - start_time > 5 and not train_fake[0]:
-                #     train_fake[0] = True
-                #     #print("faking a train!")
-                #     message = {
-                #         "CA_MSG": {
-                #             "area_id": "D9",
-                #             "to": "2018",
-                #             "descr": "0101"
-                #         }
-                #     }
-
-                # if time.perf_counter() - start_time > 10 and not train_fake[2]:
-                #     train_fake[2] = True
-                #     #print("faking a train!")
-                #     message = {
-                #         "CA_MSG": {
-                #             "area_id": "D9",
-                #             "to": "2021",
-                #             "descr": "aaaa"
-                #         }
-                #     }
 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                     show_trains = True
@@ -252,23 +226,35 @@ class TDListener(stomp.ConnectionListener):
                     else:
                         print(get_dt(), "Couldn't find id in csv service codes: ", id)
 
-                    if id in train_uids:
+                    possible_uid = None
+                    is_in_uids = id in train_uids
+                    for activation in activations:
+                        if activation[2:6] == id and not is_in_uids:
+                            possible_uid = activations[activation]["train_uid"]
+
+                    if is_in_uids or possible_uid:
                         print(get_dt(), "Found id in train_uids, trying api lookup")
                         train_lookup = None
                         try:
-                            train_lookup = lookup_by_uid(train_uids[id])
+                            if possible_uid:
+                                train_lookup = lookup_by_uid(possible_uid)
+                            else:
+                                train_lookup = lookup_by_uid(train_uids[id])
+
                             print(get_dt(), "match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                             atocName = "" if train_lookup["atocName"] == "Unknown" else train_lookup["atocName"]
+                            if possible_uid:
+                                atocName = "[Guessing] " + atocName
                             service_id = atocName + " [" + train_lookup['powerType'] + "] "
                             service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
  
                         except Exception:
                             print(get_dt(), "train lookup failed: ", traceback.format_exc())
-                            f = open("api_failures.log", "a")
-                            f.write(str(train_lookup))
-                            f.write("\n\n")
-                            f.close()
-
+                            print(get_dt(), "logging everthing")
+                            log_everything()
+                    else:
+                        print(get_dt(), "train id ", id, "not found in train_uids")
+                        log_everything()
 
                     id_type = "?"
                     if id[0] == "1":
@@ -302,38 +288,15 @@ class TDListener(stomp.ConnectionListener):
 
                     train_change = True
 
-                # if time.perf_counter() - start_time > 20 and not train_fake[1]:
-                #     train_fake[1] = True
-                #     #print("faking a train!")
-                #     message = {
-                #         "CA_MSG": {
-                #             "area_id": "D9",
-                #             "to": "2016",
-                #             "descr": "0101"
-                #         }
-                #     }
-
-
-                # if time.perf_counter() - start_time > 30 and not train_fake[3]:
-                #     train_fake[3] = True
-                #     #print("faking a train!")
-                #     message = {
-                #         "CA_MSG": {
-                #             "area_id": "D9",
-                #             "to": "2023",
-                #             "descr": "aaaa"
-                #         }
-                #     }
-
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
                     if message["CA_MSG"]["to"] == "2023":
                         train_text[1] = ""
                         train_last_seen[1] = 0
-                        print(get_dt(), "train has passed south")
+                        #print(get_dt(), "train has passed south")
                     else:
                         train_text[0] = ""
                         train_last_seen[0] = 0
-                        print(get_dt(), "train has passed north")
+                        #print(get_dt(), "train has passed north")
 
                     if train_text[0] == "" and train_text[1] == "":
                         show_trains = False
@@ -352,7 +315,6 @@ class MVTListener(stomp.ConnectionListener):
         global last_mvt_message, activations, train_ids, train_uids, activations, mvt_led
         mvt_led = not mvt_led
         last_mvt_message = time.perf_counter()
-        #print(G+'received a message "%s"' % message)
         for message in json.loads(messages):
             msg = message['body']
 
@@ -374,8 +336,6 @@ class MVTListener(stomp.ConnectionListener):
             ]
             
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
-                
-                #logging.critical("found a relevant service "+str(msg))
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 if useDisk:
                     filehandler = open("train_ids", 'wb') 
@@ -384,42 +344,12 @@ class MVTListener(stomp.ConnectionListener):
 
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                    #print("added detected train_uid: ", msg["train_id"][2:6])
                     if useDisk:
                         filehandler = open("train_uids", 'wb') 
                         pickle.dump(train_uids, filehandler)
                         filehandler.close()
-
-                    #print("successful train id")
                 else:
-                    #print("couldn't find key ", msg["train_id"], " in activations...")
                     pass
-
-
-                # #print("train_id is ", msg["train_id"])
-                # query = "SELECT train_uid, train_service_code FROM activations WHERE train_id = %s"
-                # cursor.execute(query, (str(msg["train_id"]),))
-                # records = cursor.fetchall()
-                # for record in records:
-                #     #print("found a match in sql: ", record[0], record[1], "for this id: "+msg["train_id"])
-                #     # try:
-                #     #     print("match in service codes csv: ", service_codes[record[1]])
-                #     # except:
-                #     #     print("no match for service code in csv")
-                #     try:
-                #         train_uids[msg["train_id"][2:6]] = record[0]
-                #         train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
-                #         #train_lookup = lookup_by_uid(record[0])
-                #         #print("match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
-                #     except Exception as e:
-                #         print("no match for uid on lookup api", e)
-
-
-## Showing the data
-# for record in records:
-#     print(record)
-#                 #filehandler = open("train_ids", 'wb') 
-#                 #pickle.dump(train_ids, filehandler)
 
 def make_connections():
     print(get_dt(), "reset connections")
@@ -478,11 +408,11 @@ while 1:
 
     if show_trains and current_display != "TRAINS":
         current_display = "TRAINS"
-        print(get_dt(), "showing trains", train_text)
+        #print(get_dt(), "showing trains", train_text)
 
     if not show_trains and current_display == "TRAINS":
         current_display = "BLANK"
-        print(get_dt(), "display off")
+        #print(get_dt(), "display off")
 
     if train_change and show_trains:
         train_change = False
@@ -491,7 +421,7 @@ while 1:
 
     if train_change and not show_trains:
         train_change = False   
-        print(get_dt(), "train has now passed by")
+        #print(get_dt(), "train has now passed by")
         
     if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
         train_text[0] = ""
