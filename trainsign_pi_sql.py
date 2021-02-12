@@ -47,11 +47,14 @@ train_change = False
 current_display = "BLANK"
 last_td_message = start_time
 last_mvt_message = start_time
+retry_time = 30
 
 train_fake = [False, False, False, False]
 
 train_ids = {}
+train_ids_ts = {}
 train_uids = {}
+train_uids_ts = {}
 activations = {}
 service_codes = {}
 mvt_led = False
@@ -86,8 +89,7 @@ def internet(host="8.8.8.8", port=53, timeout=3):
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
         return True
-    except socket.error as ex:
-        print(ex)
+    except Exception:
         return False
 
 class RunText(SampleBase): #SampleBase):
@@ -314,7 +316,7 @@ class MVTListener(stomp.ConnectionListener):
         print('received an error "%s"' % message)
         logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
-        global last_mvt_message, activations, train_ids, train_uids, activations, mvt_led
+        global last_mvt_message, activations, train_ids, train_uids, train_ids_ts, train_uids_ts, activations, mvt_led
         mvt_led = not mvt_led
         last_mvt_message = time.perf_counter()
         for message in json.loads(messages):
@@ -323,7 +325,8 @@ class MVTListener(stomp.ConnectionListener):
             if message['header']['msg_type'] == "0001": # this will look up all train activations and find the exact uid and trust id of our train
                 activations[msg['train_id']] = {
                     "train_uid": msg['train_uid'],
-                    "train_service_code": msg['train_service_code']
+                    "train_service_code": msg['train_service_code'],
+                    "timestamp": datetime.datetime.now()
                 }
                 #print("adding this to actiations ", msg['train_id'])
                 if useDisk:
@@ -339,6 +342,7 @@ class MVTListener(stomp.ConnectionListener):
             
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
+                train_ids_ts[msg["train_id"][2:6]] = datetime.datetime.now()
                 if useDisk:
                     filehandler = open("train_ids", 'wb') 
                     pickle.dump(train_ids, filehandler)
@@ -346,6 +350,8 @@ class MVTListener(stomp.ConnectionListener):
 
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
+                    train_uids_ts[msg["train_id"][2:6]] = datetime.datetime.now()
+
                     if useDisk:
                         filehandler = open("train_uids", 'wb') 
                         pickle.dump(train_uids, filehandler)
@@ -368,6 +374,75 @@ def make_connections():
     mvt_conn.connect(username=USERNAME, passcode=PASSWORD)
     mvt_conn.subscribe(destination=f"/topic/{mvt_channel}", id=1, ack='auto')
 
+def checking_thread():
+    global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, retry_time
+    global show_trains, current_display, train_change, train_text, train_last_seen
+    print("starting checking thread")
+    while 1:
+
+        now = datetime.datetime.now()
+
+        if now.strftime("%H:%M") == "00:00":
+            for activation in activations:
+                delta = now - activations[activation]["timestamp"]
+                if delta.days > 2:
+                    activations.pop(activation, None)
+
+            for train_id in train_ids_ts:
+                delta = now - train_ids_ts[train_id]
+                if delta.days > 2:
+                    train_ids.pop(train_id, None)
+                    train_ids_ts.pop(train_id, None)
+
+            for train_uid in train_uids_ts:
+                delta = now - train_uids_ts[train_uid]
+                if delta.days > 2:
+                    train_uids.pop(train_uid, None)
+                    train_uids_ts.pop(train_uid, None)
+
+            print(get_dt(), "wiping variables as is midnight")
+
+        if last_mvt_message + retry_time < time.perf_counter() or last_td_message + retry_time < time.perf_counter():
+            logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+            print("no messages received for 30 seconds..... ")
+            retry_time += 30
+            make_connections()
+
+        if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
+            os.system("sudo reboot")
+
+        if show_trains and current_display != "TRAINS":
+            current_display = "TRAINS"
+            #print(get_dt(), "showing trains", train_text)
+
+        if not show_trains and current_display == "TRAINS":
+            current_display = "BLANK"
+            #print(get_dt(), "display off")
+
+        if train_change and show_trains:
+            train_change = False
+            #print(get_dt(), "train approaching")
+            print(train_text)
+
+        if train_change and not show_trains:
+            train_change = False   
+            #print(get_dt(), "train has now passed by")
+            
+        if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
+            train_text[0] = ""
+            train_last_seen[0] = 0
+            print(get_dt(), "north bound train time out")
+
+        if train_text[1] and train_last_seen[1] + 300 < time.perf_counter():
+            train_text[1] = ""
+            train_last_seen[1] = 0
+            print(get_dt(), "south bound train time out")
+
+        if train_text[0] == "" and train_text[1] == "":
+            show_trains = False
+
+        time.sleep(1)
+
 line_count = 0
 
 with open('./train_service_codes/service_codes.csv') as csv_file:
@@ -381,6 +456,7 @@ with open('./train_service_codes/service_codes.csv') as csv_file:
             line_count += 1
 
 _thread.start_new_thread(check_internet, ())
+_thread.start_new_thread(checking_thread, ())
 
 make_connections()
 
@@ -390,52 +466,4 @@ if not dev:
         run_text.print_help()
 
 while 1:
-
-    now = datetime.datetime.now()
-
-    if now.strftime("%H:%M") == "00:00":
-        print(get_dt(), "wiping variables as is midnight")
-        train_ids = {}
-        train_uids = {}
-        activations = {}
-
-    if last_mvt_message + 30 < time.perf_counter() or last_td_message + 30 < time.perf_counter():
-        logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
-        last_mvt_message = time.perf_counter()
-        last_td_message = time.perf_counter()
-        make_connections()
-
-    if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
-        os.system("sudo reboot")
-
-    if show_trains and current_display != "TRAINS":
-        current_display = "TRAINS"
-        #print(get_dt(), "showing trains", train_text)
-
-    if not show_trains and current_display == "TRAINS":
-        current_display = "BLANK"
-        #print(get_dt(), "display off")
-
-    if train_change and show_trains:
-        train_change = False
-        print(get_dt(), "train approaching")
-        print(train_text)
-
-    if train_change and not show_trains:
-        train_change = False   
-        #print(get_dt(), "train has now passed by")
-        
-    if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
-        train_text[0] = ""
-        train_last_seen[0] = 0
-        print(get_dt(), "north bound train time out")
-
-    if train_text[1] and train_last_seen[1] + 300 < time.perf_counter():
-        train_text[1] = ""
-        train_last_seen[1] = 0
-        print(get_dt(), "south bound train time out")
-
-    if train_text[0] == "" and train_text[1] == "":
-        show_trains = False
-
-    time.sleep(1)
+    time.sleep(10)
