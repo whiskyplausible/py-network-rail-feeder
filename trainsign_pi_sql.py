@@ -39,6 +39,8 @@ PASSWORD = creds.PASSWORD
 td_channel = "TD_ALL_SIG_AREA"
 mvt_channel = "TRAIN_MVT_ALL_TOC"
 
+a_lock = _thread.allocate_lock()
+
 start_time = time.perf_counter()
 show_trains = False
 train_last_seen = [0,0]
@@ -47,6 +49,7 @@ train_change = False
 current_display = "BLANK"
 last_td_message = start_time
 last_mvt_message = start_time
+last_screen_update = start_time
 retry_time = 30
 
 train_fake = [False, False, False, False]
@@ -99,6 +102,8 @@ class RunText(SampleBase): #SampleBase):
         self.parser.add_argument("-t", "--text", help="The text to scroll on the RGB LED panel", default="Hello world!")
 
     def run(self):
+        global last_screen_update
+
         print("starting")
         offscreen_canvas = self.matrix.CreateFrameCanvas()
         font = graphics.Font()
@@ -109,7 +114,9 @@ class RunText(SampleBase): #SampleBase):
         posS = offscreen_canvas.width
         
         brightness = 0
+
         while True:
+            last_screen_update = time.perf_counter()
             dirColor = graphics.Color(0,0,brightness)
             redColor = graphics.Color(255,0,0)
             textColor = graphics.Color(brightness, brightness, 0)
@@ -117,9 +124,15 @@ class RunText(SampleBase): #SampleBase):
             now = datetime.datetime.now()
             timeNow = now.strftime('%H:%M:%S')
             offscreen_canvas.Clear()
+            
+            try:
+                screen_train_text = train_text.copy()
+            except:
+                print("Threading problem?")
+                screen_train_text = ["",""]
 
-            lenN = graphics.DrawText(offscreen_canvas, font, posN, 10, textColor, train_text[0])
-            lenS = graphics.DrawText(offscreen_canvas, font, posS, 21, textColor, train_text[1])
+            lenN = graphics.DrawText(offscreen_canvas, font, posN, 10, textColor, screen_train_text[0])
+            lenS = graphics.DrawText(offscreen_canvas, font, posS, 21, textColor, screen_train_text[1])
 
             posN -= 1
             if (posN + lenN < 35):
@@ -135,15 +148,18 @@ class RunText(SampleBase): #SampleBase):
             graphics.DrawText(offscreen_canvas, font, 0, 10, dirColor, "NORTH")
             graphics.DrawText(offscreen_canvas, font, 0, 21, dirColor, "SOUTH")
             graphics.DrawText(offscreen_canvas, timeFont, 72, 30, redColor, timeNow)
+            
+            try:
+                if td_led:
+                    graphics.DrawLine(offscreen_canvas,0,0,0,0,graphics.Color(255,0,0))
 
-            if td_led:
-                graphics.DrawLine(offscreen_canvas,0,0,0,0,graphics.Color(255,0,0))
+                if mvt_led:
+                    graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,255))
 
-            if mvt_led:
-                graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,255))
-
-            if api_led:
-                graphics.DrawLine(offscreen_canvas,2,0,2,0,graphics.Color(0,255,0))
+                if api_led:
+                    graphics.DrawLine(offscreen_canvas,2,0,2,0,graphics.Color(0,255,0))
+            except:
+                print("thread problem with leds?")
 
             if brightness < 251:
                 brightness+=4
@@ -192,10 +208,11 @@ def get_dt_file():
     dt_string = now.strftime("%d-%m-%Y-%H-%M-%S")
     return dt_string
 
-
 def log_everything():
+    #a_lock.acquire()
+    #print("acq: log_everything")
     filehandler = open("activations_"+get_dt_file(), 'w') 
-    filehandler.write(json.dumps(activations, indent=4))
+    filehandler.write(json.dumps(activations, indent=4, default=str))
     filehandler.close()
     filehandler = open("train_uids_"+get_dt_file(), 'w') 
     filehandler.write(json.dumps(train_uids, indent=4))
@@ -203,18 +220,25 @@ def log_everything():
     filehandler = open("train_ids_"+get_dt_file(), 'w') 
     filehandler.write(json.dumps(train_ids, indent=4))
     filehandler.close()
+    #a_lock.release()
+    #print("rel: log_everything")
 
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
         logging.critical("Error in TDListener "+str(message))
+        
     def on_message(self, headers, messages):
         global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message, td_led
         td_led = not td_led
+        a_lock.acquire()
+        print("acq: td")
+
         last_td_message = time.perf_counter()
+       
         try:
             for message in json.loads(messages):
-
+                
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                     show_trains = True
                     
@@ -230,13 +254,18 @@ class TDListener(stomp.ConnectionListener):
 
                     possible_uid = None
                     is_in_uids = id in train_uids
-                    for activation in activations:
+                    act_copy = activations.copy()
+
+                    for activation in act_copy:
                         if activation[2:6] == id and not is_in_uids and service_id == id:
                             possible_uid = activations[activation]["train_uid"]
 
                     if is_in_uids or possible_uid:
                         print(get_dt(), "Found id in train_uids, trying api lookup")
                         train_lookup = None
+                        a_lock.release()
+                        print("rel: td middle")
+
                         try:
                             if possible_uid:
                                 train_lookup = lookup_by_uid(possible_uid)
@@ -250,15 +279,24 @@ class TDListener(stomp.ConnectionListener):
                                 atocName = "[Guessing] " + atocName
                             service_id = atocName + " [" + train_lookup['powerType'] + "] "
                             service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
- 
+
                         except Exception:
                             print(get_dt(), "train lookup failed: ", traceback.format_exc())
                             print(get_dt(), "logging everthing")
+                            a_lock.acquire()
                             log_everything()
+                            a_lock.release()
+
+                        a_lock.acquire()
+                        print("acq: td middle")
+
                     else:
                         print(get_dt(), "train id ", id, "not found in train_uids")
                         log_everything()
 
+                    print("rel: td last")
+                    a_lock.release()
+                    
                     id_type = "?"
                     if id[0] == "1":
                         id_type = "High speed passenger"
@@ -281,6 +319,8 @@ class TDListener(stomp.ConnectionListener):
                     if id[0] == "8":
                         id_type = "Weather related/very slow"
                     service_id += " (" + id_type + ")"
+                    a_lock.acquire()
+                    print("acq: td last")
 
                     if message["CA_MSG"]["to"] == "2021":
                         train_text[1] = service_id
@@ -310,14 +350,20 @@ class TDListener(stomp.ConnectionListener):
         except:
             logging.critical("this is an exception", exc_info=True) 
             print(get_dt(), "error in td loop: ", traceback.format_exc())
+        a_lock.release()        
+        print("rel: td finish")
+
 
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
         logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
-        global last_mvt_message, activations, train_ids, train_uids, train_ids_ts, train_uids_ts, activations, mvt_led
+        global last_mvt_message, activations, train_ids, train_uids, train_ids_ts, train_uids_ts, mvt_led
         mvt_led = not mvt_led
+        a_lock.acquire()
+        print("acq: mvt")
+
         last_mvt_message = time.perf_counter()
         for message in json.loads(messages):
             msg = message['body']
@@ -331,7 +377,7 @@ class MVTListener(stomp.ConnectionListener):
                 #print("adding this to actiations ", msg['train_id'])
                 if useDisk:
                     filehandler = open("activations", 'wb') 
-                    pickle.dump(activations, filehandler)
+                    pickle.dump(activations, filehandler, default=str)
                     filehandler.close()
 
             stanox_list = [
@@ -358,6 +404,9 @@ class MVTListener(stomp.ConnectionListener):
                         filehandler.close()
                 else:
                     pass
+        a_lock.release()
+        print("rel: mvt")
+
 
 def make_connections():
     print(get_dt(), "reset connections")
@@ -383,6 +432,9 @@ def checking_thread():
         now = datetime.datetime.now()
 
         if now.strftime("%H:%M") == "00:00":
+            a_lock.acquire()
+            print("acq: ct")
+
             for activation in activations:
                 delta = now - activations[activation]["timestamp"]
                 if delta.days > 2:
@@ -399,8 +451,13 @@ def checking_thread():
                 if delta.days > 2:
                     train_uids.pop(train_uid, None)
                     train_uids_ts.pop(train_uid, None)
+            a_lock.release()
+            print("rel: ct")
 
             print(get_dt(), "wiping variables as is midnight")
+
+        a_lock.acquire()
+        print("acq: ct 2")
 
         if last_mvt_message + retry_time < time.perf_counter() or last_td_message + retry_time < time.perf_counter():
             logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
@@ -410,6 +467,18 @@ def checking_thread():
 
         if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
             os.system("sudo reboot")
+
+
+        try:
+            last_screen = last_screen_update
+        except:
+            last_screen = time.perf_counter()
+
+        if last_screen + 300 < time.perf_counter():
+            os.system("sudo reboot")
+
+        a_lock.release()
+        print("rel: ct 2")
 
         if show_trains and current_display != "TRAINS":
             current_display = "TRAINS"
@@ -422,12 +491,15 @@ def checking_thread():
         if train_change and show_trains:
             train_change = False
             #print(get_dt(), "train approaching")
-            print(train_text)
+            #print(train_text)
 
         if train_change and not show_trains:
             train_change = False   
             #print(get_dt(), "train has now passed by")
-            
+
+        a_lock.acquire()
+        print("acq: ct 3")
+
         if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
             train_text[0] = ""
             train_last_seen[0] = 0
@@ -440,6 +512,9 @@ def checking_thread():
 
         if train_text[0] == "" and train_text[1] == "":
             show_trains = False
+
+        a_lock.release()
+        print("rel: ct 3")
 
         time.sleep(1)
 
