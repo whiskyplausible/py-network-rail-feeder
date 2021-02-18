@@ -1,8 +1,8 @@
 ## TODO
-## Write protect SD card
-## Turn off disk logging.
+## Wrap all the make_connection in a try loop as at the moment it's crashing the checking thread!!!!
+## In the checking thread wrap anything that could crash in a try: block as we don't want this to crash.
+## Add secondary watch dog that checks if the checking loop has crashed and restarts then?
 ## some external logging?!
-## Dim status LEDs - maybe move to bottom of screen?
 
 import pickle
 import stomp
@@ -12,13 +12,14 @@ import creds
 import csv 
 import logging
 import datetime
+import ntplib
+from pytz import timezone
 import os
 import socket
 import requests
 import traceback
 import _thread
 from requests.auth import HTTPBasicAuth 
-#import mysql.connector as mysql
 
 dev = False
 useDisk = False
@@ -27,11 +28,17 @@ if not dev:
     from samplebase import SampleBase
     from rgbmatrix import graphics
 
-logging.basicConfig(
-    filename='trains.log', filemode='a',
-    format='%(asctime)s %(levelname)-8s %(message)s',
-    level=logging.CRITICAL,
-    datefmt='%Y-%m-%d %H:%M:%S')
+if useDisk:
+    logging.basicConfig(
+        filename='trains.log', filemode='a',
+        format='%(asctime)s %(levelname)-8s %(message)s',
+        level=logging.CRITICAL,
+        datefmt='%Y-%m-%d %H:%M:%S')
+else:
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-8s %(message)s',
+        level=logging.CRITICAL,
+        datefmt='%Y-%m-%d %H:%M:%S')
 
 HOSTNAME = "datafeeds.networkrail.co.uk"
 USERNAME = creds.USERNAME
@@ -50,7 +57,9 @@ current_display = "BLANK"
 last_td_message = start_time
 last_mvt_message = start_time
 last_screen_update = start_time
+last_screen = start_time
 retry_time = 30
+purged = False
 
 train_fake = [False, False, False, False]
 
@@ -95,6 +104,17 @@ def internet(host="8.8.8.8", port=53, timeout=3):
     except Exception:
         return False
 
+def set_time():
+    try:
+        ntp_time = ntplib.NTPClient()
+        response = ntp_time.request('uk.pool.ntp.org', version=3)
+        response.offset
+        now = datetime.datetime.fromtimestamp(response.tx_time, timezone('Europe/London'))
+        nowstr = now.strftime("%d %b %Y %H:%M:%S")
+        os.system('sudo date -s "'+nowstr+'"')
+    except:
+        print("failed to get/set time")
+        
 class RunText(SampleBase): #SampleBase):
     def __init__(self, *args, **kwargs):
         print("init")
@@ -112,13 +132,14 @@ class RunText(SampleBase): #SampleBase):
         timeFont.LoadFont("../../../fonts/6x10.bdf")
         posN = offscreen_canvas.width
         posS = offscreen_canvas.width
-        
+        approach = [0,0]
         brightness = 0
+        screen_train_text = ["",""]
+        redColor = graphics.Color(255,0,0)
 
         while True:
             last_screen_update = time.perf_counter()
             dirColor = graphics.Color(0,0,brightness)
-            redColor = graphics.Color(255,0,0)
             textColor = graphics.Color(brightness, brightness, 0)
 
             now = datetime.datetime.now()
@@ -126,21 +147,51 @@ class RunText(SampleBase): #SampleBase):
             offscreen_canvas.Clear()
             
             try:
+                if train_text[0] and not screen_train_text[0]:
+                    approach[0] = time.perf_counter()
+                    flash = time.perf_counter()
+                if train_text[1] and not screen_train_text[1]:
+                    approach[1] = time.perf_counter()
+                    flash = time.perf_counter()
+            except:
+                print("thread nonsense")
+
+            try:
                 screen_train_text = train_text.copy()
             except:
                 print("Threading problem?")
                 screen_train_text = ["",""]
 
-            lenN = graphics.DrawText(offscreen_canvas, font, posN, 10, textColor, screen_train_text[0])
-            lenS = graphics.DrawText(offscreen_canvas, font, posS, 21, textColor, screen_train_text[1])
+            if approach[0] > 0:
+                if approach[0] + 3 < time.perf_counter():
+                    approach[0] = 0
+                else:
+                   graphics.DrawText(offscreen_canvas, font, 35, 10, graphics.Color(255,150,0), "TRAIN APPROACHING")
+            else:
+                lenN = graphics.DrawText(offscreen_canvas, font, posN, 10, textColor, screen_train_text[0])
+                posN -= 1
+                if (posN + lenN < 35):
+                    posN = offscreen_canvas.width
 
-            posN -= 1
-            if (posN + lenN < 35):
-                posN = offscreen_canvas.width
+            if approach[1] > 0:
+                if approach[1] + 3 < time.perf_counter():
+                    approach[1] = 0
+                else:
+                   graphics.DrawText(offscreen_canvas, font, 35, 21, graphics.Color(255,150,0), "TRAIN APPROACHING")
+            else:
+                lenS = graphics.DrawText(offscreen_canvas, font, posS, 21, textColor, screen_train_text[1])
+                posS -= 1
+                if (posS + lenS < 35):
+                    posS = offscreen_canvas.width
 
-            posS -= 1
-            if (posS + lenS < 35):
-                posS = offscreen_canvas.width
+            # lenN = graphics.DrawText(offscreen_canvas, font, posN, 10, textColor, screen_train_text[0])
+            # posN -= 1
+            # if (posN + lenN < 35):
+            #     posN = offscreen_canvas.width
+            # lenS = graphics.DrawText(offscreen_canvas, font, posS, 21, textColor, screen_train_text[1])
+            # posS -= 1
+            # if (posS + lenS < 35):
+            #     posS = offscreen_canvas.width
 
             for box in range(0,24):
                 graphics.DrawLine(offscreen_canvas,0,box, 35,box,graphics.Color(0,0,0))
@@ -151,13 +202,13 @@ class RunText(SampleBase): #SampleBase):
             
             try:
                 if td_led:
-                    graphics.DrawLine(offscreen_canvas,0,0,0,0,graphics.Color(255,0,0))
+                    graphics.DrawLine(offscreen_canvas,0,0,0,0,graphics.Color(50,0,0))
 
                 if mvt_led:
-                    graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,255))
+                    graphics.DrawLine(offscreen_canvas,1,0,1,0,graphics.Color(0,0,50))
 
                 if api_led:
-                    graphics.DrawLine(offscreen_canvas,2,0,2,0,graphics.Color(0,255,0))
+                    graphics.DrawLine(offscreen_canvas,2,0,2,0,graphics.Color(0,50,0))
             except:
                 print("thread problem with leds?")
 
@@ -211,6 +262,8 @@ def get_dt_file():
 def log_everything():
     #a_lock.acquire()
     #print("acq: log_everything")
+    if not useDisk:
+        return None
     filehandler = open("activations_"+get_dt_file(), 'w') 
     filehandler.write(json.dumps(activations, indent=4, default=str))
     filehandler.close()
@@ -232,22 +285,43 @@ class TDListener(stomp.ConnectionListener):
         global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message, td_led
         td_led = not td_led
         a_lock.acquire()
-        print("acq: td")
+        #print("acq: td")
 
         last_td_message = time.perf_counter()
        
         try:
             for message in json.loads(messages):
+                # if time.perf_counter() - start_time > 5 and not train_fake[0]:
+                #     train_fake[0] = True
+                #     print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2018",
+                #             "descr": "0101"
+                #         }
+                #     }
+
+                # if time.perf_counter() - start_time > 10 and not train_fake[2]:
+                #     train_fake[2] = True
+                #     print("faking a train!")
+                #     message = {
+                #         "CA_MSG": {
+                #             "area_id": "D9",
+                #             "to": "2021",
+                #             "descr": "aaaa"
+                #         }
+                #     }
                 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2021", "2018"]: #2021 south 2018 north
                     show_trains = True
-                    
+
                     id = message["CA_MSG"]["descr"]
                     service_id = id                    
                     logging.critical("Train arrived at monitored berths. "+ str(message))
 
                     if id in train_ids and train_ids[id] in service_codes:
-                        service_id = service_codes[train_ids[id]]
+                        service_id = "[Guess] " + service_codes[train_ids[id]]
                         print(get_dt(), "service code found in csv ", id, service_id)
                     else:
                         print(get_dt(), "Couldn't find id in csv service codes: ", id)
@@ -264,7 +338,7 @@ class TDListener(stomp.ConnectionListener):
                         print(get_dt(), "Found id in train_uids, trying api lookup")
                         train_lookup = None
                         a_lock.release()
-                        print("rel: td middle")
+                        #print("rel: td middle")
 
                         try:
                             if possible_uid:
@@ -276,25 +350,27 @@ class TDListener(stomp.ConnectionListener):
                             print(get_dt(), "match from lookup by uid origin: ",train_lookup["origin"][0]["description"]+" dest: "+ train_lookup["destination"][0]["description"])
                             atocName = "" if train_lookup["atocName"] == "Unknown" else train_lookup["atocName"]
                             if possible_uid:
-                                atocName = "[Guessing] " + atocName
+                                atocName = "[Guess] " + atocName
                             service_id = atocName + " [" + train_lookup['powerType'] + "] "
                             service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
 
                         except Exception:
                             print(get_dt(), "train lookup failed: ", traceback.format_exc())
+                            if 'train_lookup' in locals():
+                                print("response from lookup: ", train_lookup)
                             print(get_dt(), "logging everthing")
                             a_lock.acquire()
                             log_everything()
                             a_lock.release()
 
                         a_lock.acquire()
-                        print("acq: td middle")
+                        #print("acq: td middle")
 
                     else:
                         print(get_dt(), "train id ", id, "not found in train_uids")
                         log_everything()
 
-                    print("rel: td last")
+                    #print("rel: td last")
                     a_lock.release()
                     
                     id_type = "?"
@@ -320,7 +396,7 @@ class TDListener(stomp.ConnectionListener):
                         id_type = "Weather related/very slow"
                     service_id += " (" + id_type + ")"
                     a_lock.acquire()
-                    print("acq: td last")
+                    #print("acq: td last")
 
                     if message["CA_MSG"]["to"] == "2021":
                         train_text[1] = service_id
@@ -351,8 +427,7 @@ class TDListener(stomp.ConnectionListener):
             logging.critical("this is an exception", exc_info=True) 
             print(get_dt(), "error in td loop: ", traceback.format_exc())
         a_lock.release()        
-        print("rel: td finish")
-
+        #print("rel: td finish")
 
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
@@ -362,7 +437,7 @@ class MVTListener(stomp.ConnectionListener):
         global last_mvt_message, activations, train_ids, train_uids, train_ids_ts, train_uids_ts, mvt_led
         mvt_led = not mvt_led
         a_lock.acquire()
-        print("acq: mvt")
+        #print("acq: mvt")
 
         last_mvt_message = time.perf_counter()
         for message in json.loads(messages):
@@ -405,35 +480,50 @@ class MVTListener(stomp.ConnectionListener):
                 else:
                     pass
         a_lock.release()
-        print("rel: mvt")
-
+        #print("rel: mvt")
 
 def make_connections():
     print(get_dt(), "reset connections")
     logging.critical("resetting connections") 
-    td_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
-    td_conn.set_listener('', TDListener())
-    td_conn.start()
-    td_conn.connect(username=USERNAME, passcode=PASSWORD)
-    td_conn.subscribe(destination=f"/topic/{td_channel}", id=1, ack='auto')
+    # Need to wrap these in a try loop. As this will crash the checking_thread otherwise!!!
+    try:
+        td_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
+        td_conn.set_listener('', TDListener())
+        td_conn.start()
+        td_conn.connect(username=USERNAME, passcode=PASSWORD)
+        td_conn.subscribe(destination=f"/topic/{td_channel}", id=1, ack='auto')
 
-    mvt_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
-    mvt_conn.set_listener('', MVTListener())
-    mvt_conn.start()
-    mvt_conn.connect(username=USERNAME, passcode=PASSWORD)
-    mvt_conn.subscribe(destination=f"/topic/{mvt_channel}", id=1, ack='auto')
+        mvt_conn = stomp.Connection(host_and_ports=[(HOSTNAME, 61618)])
+        mvt_conn.set_listener('', MVTListener())
+        mvt_conn.start()
+        mvt_conn.connect(username=USERNAME, passcode=PASSWORD)
+        mvt_conn.subscribe(destination=f"/topic/{mvt_channel}", id=1, ack='auto')
+    except:
+        print("failed to reset connections")
+
+def check_checking_thread():
+    global last_screen
+    while True:
+        if last_screen + 1800 < time.perf_counter():
+           os.system("sudo reboot")
+        time.sleep(600)
 
 def checking_thread():
     global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, retry_time
-    global show_trains, current_display, train_change, train_text, train_last_seen
+    global show_trains, current_display, train_change, train_text, train_last_seen, purged, last_screen
     print("starting checking thread")
     while 1:
 
         now = datetime.datetime.now()
 
-        if now.strftime("%H:%M") == "00:00":
+        if now.strftime("%H:%M") == "00:01":
+            purged = False
+
+        if now.strftime("%H:%M") == "00:00" and not purged:
+            purged = True
+            set_time()
             a_lock.acquire()
-            print("acq: ct")
+            #print("acq: ct")
 
             for activation in activations:
                 delta = now - activations[activation]["timestamp"]
@@ -452,12 +542,12 @@ def checking_thread():
                     train_uids.pop(train_uid, None)
                     train_uids_ts.pop(train_uid, None)
             a_lock.release()
-            print("rel: ct")
+            #print("rel: ct")
 
             print(get_dt(), "wiping variables as is midnight")
 
         a_lock.acquire()
-        print("acq: ct 2")
+        #print("acq: ct 2")
 
         if last_mvt_message + retry_time < time.perf_counter() or last_td_message + retry_time < time.perf_counter():
             logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
@@ -468,7 +558,6 @@ def checking_thread():
         if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
             os.system("sudo reboot")
 
-
         try:
             last_screen = last_screen_update
         except:
@@ -478,7 +567,7 @@ def checking_thread():
             os.system("sudo reboot")
 
         a_lock.release()
-        print("rel: ct 2")
+        #print("rel: ct 2")
 
         if show_trains and current_display != "TRAINS":
             current_display = "TRAINS"
@@ -498,7 +587,7 @@ def checking_thread():
             #print(get_dt(), "train has now passed by")
 
         a_lock.acquire()
-        print("acq: ct 3")
+        #print("acq: ct 3")
 
         if train_text[0] and train_last_seen[0] + 300 < time.perf_counter():
             train_text[0] = ""
@@ -514,7 +603,7 @@ def checking_thread():
             show_trains = False
 
         a_lock.release()
-        print("rel: ct 3")
+        #print("rel: ct 3")
 
         time.sleep(1)
 
@@ -532,8 +621,10 @@ with open('./train_service_codes/service_codes.csv') as csv_file:
 
 _thread.start_new_thread(check_internet, ())
 _thread.start_new_thread(checking_thread, ())
+_thread.start_new_thread(check_checking_thread, ())
 
 make_connections()
+set_time()
 
 if not dev:
     run_text = RunText()
