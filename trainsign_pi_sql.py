@@ -58,7 +58,8 @@ last_td_message = start_time
 last_mvt_message = start_time
 last_screen_update = start_time
 last_screen = start_time
-retry_time = 120
+mvt_retry_time = 1800
+td_retry_time = 1800
 purged = False
 td_conn = None
 mvt_conn = None
@@ -520,24 +521,31 @@ def make_connections():
 def check_checking_thread():
     global last_screen
     while True:
-        if last_screen + 1800 < time.perf_counter():
+        if last_screen + 3600 < time.perf_counter():
            print("trying to reboot in the check_checking_thread")
            os.system("sudo reboot")
         time.sleep(600)
 
 def checking_thread():
-    global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, retry_time
+    global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, mvt_retry_time, td_retry_time
     global show_trains, current_display, train_change, train_text, train_last_seen, purged, last_screen
     print("starting checking thread")
     while 1:
 
         now = datetime.datetime.now()
 
+        try:
+            last_screen = last_screen_update
+        except:
+            last_screen = time.perf_counter()
+
         if now.strftime("%H:%M") == "00:01":
             purged = False
 
         if now.strftime("%H:%M") == "00:00" and not purged:
-            retry_time = 120
+            mvt_retry_time = 1800
+            td_retry_time = 1800
+
             purged = True
             set_time()
             a_lock.acquire()
@@ -567,20 +575,25 @@ def checking_thread():
         a_lock.acquire()
         #print("acq: ct 2")
 
-        if last_mvt_message + retry_time < time.perf_counter() or last_td_message + retry_time < time.perf_counter():
-            logging.critical("attempting connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
-            print("no messages received for 30 seconds..... ")
-            retry_time += 120
-            make_connections()
+        start = datetime.time(6)
+        end = datetime.time(23, 59)
 
-        if last_mvt_message + 3600 < time.perf_counter() or last_td_message + 3600 < time.perf_counter():
-            print("trying to reboot in the 3600 wait bit")
-            os.system("sudo reboot")
+        if start <= now.time() <= end:
+            if last_mvt_message + mvt_retry_time < time.perf_counter():
+                logging.critical("attempting mvt connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+                print("no mvt messages received for a while..... ")
+                mvt_retry_time += 1800
+                make_connections()
 
-        try:
-            last_screen = last_screen_update
-        except:
-            last_screen = time.perf_counter()
+            if last_td_message + td_retry_time < time.perf_counter():
+                logging.critical("attempting td connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+                print("no td messages received for a while..... ")
+                td_retry_time += 1800
+                make_connections()
+
+            if last_mvt_message + 4000 < time.perf_counter() or last_td_message + 4000 < time.perf_counter():
+                print("trying to reboot in the 4000 wait bit")
+                os.system("sudo reboot")
 
         if last_screen + 300 < time.perf_counter():
             print("trying to reboot as screen hasn't updated itself in last 10 mins")
