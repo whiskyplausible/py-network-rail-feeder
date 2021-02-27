@@ -19,16 +19,18 @@ import socket
 import requests
 import traceback
 import _thread
+import sys
 from requests.auth import HTTPBasicAuth 
 
 dev = False
-useDisk = False
+useDisk = True
+logDisk = False
 
 if not dev:
     from samplebase import SampleBase
     from rgbmatrix import graphics
 
-if useDisk:
+if logDisk:
     logging.basicConfig(
         filename='trains.log', filemode='a',
         format='%(asctime)s %(levelname)-8s %(message)s',
@@ -57,6 +59,7 @@ current_display = "BLANK"
 last_td_message = start_time
 last_mvt_message = start_time
 last_screen_update = start_time
+last_check_thread_run = start_time
 last_screen = start_time
 mvt_retry_time = 1800
 td_retry_time = 1800
@@ -78,26 +81,40 @@ api_led = False
 internet_on = False
 
 if useDisk:
-    try:
-        filehandler = open("activations", 'rb') 
-        activations = pickle.load(filehandler)
+    try: 
+        print("trying to read train data...")
+        filehandler = open("/mnt/mydisk/train_data", "rb")
+        all_data = pickle.load(filehandler)
         filehandler.close()
+        train_ids = all_data["train_ids"]
+        train_ids_ts = all_data["train_ids_ts"]
+        activations = all_data["activations"]
+        train_uids = all_data["train_uids"]
+        train_uids_ts = all_data["train_uids_ts"]
+        print("read train data OK i think...")
     except:
-        print ("couldn't load file: activations")
+        print("Failed to load train_data file off USB")
 
-    try:
-        filehandler = open("train_ids", 'rb') 
-        train_ids = pickle.load(filehandler)
-        filehandler.close()
-    except:
-        print ("couldn't load file: train_ids")
+    # try:
+    #     filehandler = open("activations", 'rb') 
+    #     activations = pickle.load(filehandler)
+    #     filehandler.close()
+    # except:
+    #     print ("couldn't load file: activations")
 
-    try:
-        filehandler = open("train_uids", 'rb') 
-        train_uids = pickle.load(filehandler)
-        filehandler.close()
-    except:
-        print ("couldn't load file: train_uids")
+    # try:
+    #     filehandler = open("train_ids", 'rb') 
+    #     train_ids = pickle.load(filehandler)
+    #     filehandler.close()
+    # except:
+    #     print ("couldn't load file: train_ids")
+
+    # try:
+    #     filehandler = open("train_uids", 'rb') 
+    #     train_uids = pickle.load(filehandler)
+    #     filehandler.close()
+    # except:
+    #     print ("couldn't load file: train_uids")
 
 def internet(host="8.8.8.8", port=53, timeout=3):
     try:
@@ -265,6 +282,7 @@ def get_dt_file():
     return dt_string
 
 def log_everything():
+    return None
     #a_lock.acquire()
     #print("acq: log_everything")
     if not useDisk:
@@ -373,6 +391,8 @@ class TDListener(stomp.ConnectionListener):
 
                     else:
                         print(get_dt(), "train id ", id, "not found in train_uids")
+                        print(get_dt(), "train_uids size ", sys.getsizeof(train_uids))
+
                         log_everything()
 
                     #print("rel: td last")
@@ -455,10 +475,6 @@ class MVTListener(stomp.ConnectionListener):
                     "timestamp": datetime.datetime.now()
                 }
                 #print("adding this to actiations ", msg['train_id'])
-                if useDisk:
-                    filehandler = open("activations", 'wb') 
-                    pickle.dump(activations, filehandler, default=str)
-                    filehandler.close()
 
             stanox_list = [
                 msg['reporting_stanox'][0:2] if 'reporting_stanox' in msg else "00",
@@ -469,19 +485,11 @@ class MVTListener(stomp.ConnectionListener):
             if set(stanox_list).intersection(["68", "75", "81", "76"]) != set():
                 train_ids[msg["train_id"][2:6]] = msg["train_service_code"]
                 train_ids_ts[msg["train_id"][2:6]] = datetime.datetime.now()
-                if useDisk:
-                    filehandler = open("train_ids", 'wb') 
-                    pickle.dump(train_ids, filehandler)
-                    filehandler.close()
 
                 if msg["train_id"] in activations:
                     train_uids[msg["train_id"][2:6]] = activations[msg["train_id"]]["train_uid"]
                     train_uids_ts[msg["train_id"][2:6]] = datetime.datetime.now()
 
-                    if useDisk:
-                        filehandler = open("train_uids", 'wb') 
-                        pickle.dump(train_uids, filehandler)
-                        filehandler.close()
                 else:
                     pass
         a_lock.release()
@@ -519,21 +527,24 @@ def make_connections():
         print("failed to reset connections")
 
 def check_checking_thread():
-    global last_screen
+    global last_check_thread_run, useDisk
     while True:
-        if last_screen + 3600 < time.perf_counter():
-           print("trying to reboot in the check_checking_thread")
-           os.system("sudo reboot")
+        if last_check_thread_run + 3600 < time.perf_counter():
+            print(get_dt(),"trying to reboot in the check_checking_thread")
+            time.sleep(30)
+            os.system("sudo reboot")
+
         time.sleep(600)
 
 def checking_thread():
     global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, mvt_retry_time, td_retry_time
-    global show_trains, current_display, train_change, train_text, train_last_seen, purged, last_screen
+    global show_trains, current_display, train_change, train_text, train_last_seen, purged, last_screen, last_screen_update, last_check_thread_run
     print("starting checking thread")
+    usb_dump_done = False
     while 1:
 
         now = datetime.datetime.now()
-
+        last_check_thread_run = time.perf_counter()
         try:
             last_screen = last_screen_update
         except:
@@ -542,12 +553,38 @@ def checking_thread():
         if now.strftime("%H:%M") == "00:01":
             purged = False
 
+        if now.strftime("%M")[1] == "0" and not usb_dump_done and useDisk:
+            usb_dump_done = True
+            print("trying to save data on usb, the 10 minute thing")
+            a_lock.acquire()
+            print("got lock, saving...")
+            try:
+                filehandler = open("/mnt/mydisk/train_data", "wb")
+                save_obj = {
+                    "train_ids": train_ids,
+                    "train_ids_ts": train_ids_ts,
+                    "train_uids": train_uids,
+                    "train_uids_ts": train_uids_ts,
+                    "activations": activations
+                }
+                pickle.dump(save_obj, filehandler)
+                save_obj = None
+                filehandler.close()
+                print("saved pickle data.")
+            except:
+                print(get_dt(), "Failed to write train log stuff.")
+
+            a_lock.release()
+            print("lock released")
+
+        if now.strftime("%M")[1] == "1":
+            usb_dump_done = False
+
         if now.strftime("%H:%M") == "00:00" and not purged:
             mvt_retry_time = 1800
             td_retry_time = 1800
 
             purged = True
-            set_time()
             a_lock.acquire()
             #print("acq: ct")
 
@@ -567,10 +604,11 @@ def checking_thread():
                 if delta.days > 2:
                     train_uids.pop(train_uid, None)
                     train_uids_ts.pop(train_uid, None)
+
             a_lock.release()
             #print("rel: ct")
-
-            print(get_dt(), "wiping variables as is midnight")
+            set_time()
+            print(get_dt(), "wiped variables as is midnight")
 
         a_lock.acquire()
         #print("acq: ct 2")
@@ -581,22 +619,24 @@ def checking_thread():
         if start <= now.time() <= end:
             if last_mvt_message + mvt_retry_time < time.perf_counter():
                 logging.critical("attempting mvt connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
-                print("no mvt messages received for a while..... ")
+                print(get_dt(),"no mvt messages received for a while..... ")
                 mvt_retry_time += 1800
                 make_connections()
 
             if last_td_message + td_retry_time < time.perf_counter():
                 logging.critical("attempting td connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
-                print("no td messages received for a while..... ")
+                print(get_dt(),"no td messages received for a while..... ")
                 td_retry_time += 1800
                 make_connections()
 
             if last_mvt_message + 4000 < time.perf_counter() or last_td_message + 4000 < time.perf_counter():
-                print("trying to reboot in the 4000 wait bit")
+                print(get_dt(),"trying to reboot in the 4000 wait bit")
+                time.sleep(30)
                 os.system("sudo reboot")
 
         if last_screen + 300 < time.perf_counter():
-            print("trying to reboot as screen hasn't updated itself in last 10 mins")
+            print(get_dt(),"trying to reboot as screen hasn't updated itself in last 10 mins")
+            time.sleep(30)
             os.system("sudo reboot")
 
         a_lock.release()
