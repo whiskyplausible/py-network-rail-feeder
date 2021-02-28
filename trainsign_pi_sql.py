@@ -21,6 +21,20 @@ import traceback
 import _thread
 import sys
 from requests.auth import HTTPBasicAuth 
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
+import logging
+
+sentry_logging = LoggingIntegration(
+    level=logging.INFO,        # Capture info and above as breadcrumbs
+    event_level=logging.CRITICAL  # Send errors as events
+)
+
+sentry_sdk.init(
+    "",
+    traces_sample_rate=1.0,
+    integrations=[sentry_logging]
+)
 
 dev = False
 useDisk = True
@@ -302,7 +316,7 @@ def log_everything():
 class TDListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
-        logging.critical("Error in TDListener "+str(message))
+        #logging.critical("Error in TDListener "+str(message))
         
     def on_message(self, headers, messages):
         global train_fake, train_text, train_last_seen, train_change, show_trains, last_td_message, td_led
@@ -341,7 +355,7 @@ class TDListener(stomp.ConnectionListener):
 
                     id = message["CA_MSG"]["descr"]
                     service_id = id                    
-                    logging.critical("Train arrived at monitored berths. "+ str(message))
+                    #logging.critical("Train arrived at monitored berths. "+ str(message))
 
                     if id in train_ids and train_ids[id] in service_codes:
                         service_id = "[Guess] " + service_codes[train_ids[id]]
@@ -431,6 +445,7 @@ class TDListener(stomp.ConnectionListener):
                         train_last_seen[0] = time.perf_counter() 
 
                     train_change = True
+                    logging.critical(service_id)
                     print("************************************************************")
 
                 if "CA_MSG" in message and message["CA_MSG"]["area_id"] in ["D9"] and message["CA_MSG"]["to"] in [ "2023", "2016"]: #train has passed by now
@@ -449,7 +464,7 @@ class TDListener(stomp.ConnectionListener):
                     train_change = True
         
         except:
-            logging.critical("this is an exception", exc_info=True) 
+            #logging.critical("this is an exception", exc_info=True) 
             print(get_dt(), "error in td loop: ", traceback.format_exc())
         a_lock.release()        
         #print("rel: td finish")
@@ -457,7 +472,7 @@ class TDListener(stomp.ConnectionListener):
 class MVTListener(stomp.ConnectionListener):
     def on_error(self, headers, message):
         print('received an error "%s"' % message)
-        logging.critical("Error in MVTListener "+str(message))
+        #logging.critical("Error in MVTListener "+str(message))
     def on_message(self, headers, messages):
         global last_mvt_message, activations, train_ids, train_uids, train_ids_ts, train_uids_ts, mvt_led
         mvt_led = not mvt_led
@@ -531,6 +546,7 @@ def check_checking_thread():
     while True:
         if last_check_thread_run + 3600 < time.perf_counter():
             print(get_dt(),"trying to reboot in the check_checking_thread")
+            logging.critical("trying reboot as main_checking_thread seems to be dead")
             time.sleep(30)
             os.system("sudo reboot")
 
@@ -540,6 +556,7 @@ def checking_thread():
     global train_ids, train_uids, train_ids_ts, train_uids_ts, activations, last_mvt_message, last_td_message, mvt_retry_time, td_retry_time
     global show_trains, current_display, train_change, train_text, train_last_seen, purged, last_screen, last_screen_update, last_check_thread_run
     print("starting checking thread")
+    logging.critical("starting checking thread.")
     usb_dump_done = False
     while 1:
 
@@ -618,24 +635,26 @@ def checking_thread():
 
         if start <= now.time() <= end:
             if last_mvt_message + mvt_retry_time < time.perf_counter():
-                logging.critical("attempting mvt connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+                #logging.critical("attempting mvt connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
                 print(get_dt(),"no mvt messages received for a while..... ")
                 mvt_retry_time += 1800
                 make_connections()
 
             if last_td_message + td_retry_time < time.perf_counter():
-                logging.critical("attempting td connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
+                #logging.critical("attempting td connection reset last mvt: "+str(last_mvt_message)+" last td: "+str(last_td_message) + " perf count: "+str(time.perf_counter())) 
                 print(get_dt(),"no td messages received for a while..... ")
                 td_retry_time += 1800
                 make_connections()
 
             if last_mvt_message + 4000 < time.perf_counter() or last_td_message + 4000 < time.perf_counter():
                 print(get_dt(),"trying to reboot in the 4000 wait bit")
+                logging.critical("rebooting after 4000 second wait thing")
                 time.sleep(30)
                 os.system("sudo reboot")
 
         if last_screen + 300 < time.perf_counter():
             print(get_dt(),"trying to reboot as screen hasn't updated itself in last 10 mins")
+            logging.critical("rebooting as screen thread not responding")
             time.sleep(30)
             os.system("sudo reboot")
 
@@ -698,7 +717,7 @@ _thread.start_new_thread(check_checking_thread, ())
 
 make_connections()
 set_time()
-
+logging.critical("starting up")
 if not dev:
     run_text = RunText()
     if (not run_text.process()):
