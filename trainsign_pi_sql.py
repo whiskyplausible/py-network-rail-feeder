@@ -391,6 +391,9 @@ class TDListener(stomp.ConnectionListener):
                             service_id = atocName + " [" + train_lookup['powerType'] + "] "
                             service_id += train_lookup["origin"][0]["description"]+" to "+ train_lookup["destination"][0]["description"]
 
+                            if train_lookup["origin"][0]["tiploc"] == "BRKELEY" or train_lookup["origin"][0]["tiploc"] == "BRDGWUY":
+                                service_id = "!!!NUCLEAR!!!NUCLEAR!!! " + service_id
+
                         except Exception:
                             print(get_dt(), "train lookup failed: ", traceback.format_exc())
                             if 'train_lookup' in locals():
