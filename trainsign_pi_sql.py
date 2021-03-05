@@ -31,7 +31,7 @@ sentry_logging = LoggingIntegration(
 )
 
 sentry_sdk.init(
-    "",
+    "https://05d110c58eb94bc487cf067ed4f2254a@o536441.ingest.sentry.io/5655032",
     traces_sample_rate=1.0,
     integrations=[sentry_logging]
 )
